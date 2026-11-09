@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_trading_mirror_list" model="ir.ui.view">
+        <field name="name">trading.mirror.list</field>
+        <field name="model">trading.mirror</field>
+        <field name="arch" type="xml">
+            <list create="0">
+                <field name="name"/>
+                <field name="account_id"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="start_date"/>
+                <field name="initial_investment" sum="Total"/>
+                <field name="open_position_count"/>
+                <field name="value" sum="Total"/>
+                <field name="unrealized_pnl" sum="Total" decoration-success="unrealized_pnl &gt; 0" decoration-danger="unrealized_pnl &lt; 0"/>
+                <field name="total_pnl" sum="Total" decoration-success="total_pnl &gt; 0" decoration-danger="total_pnl &lt; 0"/>
+                <field name="total_pnl_pct"/>
+                <field name="paused" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_trading_mirror_form" model="ir.ui.view">
+        <field name="name">trading.mirror.form</field>
+        <field name="model">trading.mirror</field>
+        <field name="arch" type="xml">
+            <form create="0">
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_positions" type="object" class="oe_stat_button" icon="fa-briefcase">
+                            <field name="open_position_count" widget="statinfo" string="Posiciones"/>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="En pausa" bg_color="text-bg-warning" invisible="not paused"/>
+                    <div class="oe_title"><h1><field name="name" readonly="1"/></h1></div>
+                    <group>
+                        <group string="Copia">
+                            <field name="account_id" readonly="1"/>
+                            <field name="broker_ref" readonly="1"/>
+                            <field name="start_date"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="initial_investment"/>
+                            <field name="deposits"/>
+                            <field name="withdrawals"/>
+                            <field name="stop_loss_amount"/>
+                            <field name="stop_loss_pct"/>
+                            <field name="paused" invisible="1"/>
+                        </group>
+                        <group string="Situación">
+                            <field name="available_amount"/>
+                            <field name="invested"/>
+                            <field name="unrealized_pnl"/>
+                            <field name="value"/>
+                            <field name="total_pnl"/>
+                            <field name="total_pnl_pct"/>
+                            <field name="closed_pnl"/>
+                        </group>
+                    </group>
+                    <field name="position_ids" readonly="1">
+                        <list>
+                            <field name="instrument_id" optional="show"/>
+                            <field name="side" optional="show"/>
+                            <field name="open_date" optional="show"/>
+                            <field name="currency_id" column_invisible="1"/>
+                            <field name="amount" optional="show" sum="Total"/>
+                            <field name="open_rate" optional="show"/>
+                            <field name="current_rate" optional="show"/>
+                            <field name="unrealized_pnl" optional="show" sum="Total"/>
+                            <field name="current_value" optional="show" sum="Total"/>
+                            <field name="state" column_invisible="1"/>
+                        </list>
+                    </field>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_trading_mirror" model="ir.actions.act_window">
+        <field name="name">Carteras copiadas</field>
+        <field name="res_model">trading.mirror</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

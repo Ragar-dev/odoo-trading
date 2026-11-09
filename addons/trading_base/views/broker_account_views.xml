@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_trading_broker_account_list" model="ir.ui.view">
+        <field name="name">trading.broker.account.list</field>
+        <field name="model">trading.broker.account</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="broker_type"/>
+                <field name="environment" widget="badge" decoration-danger="environment == 'real'" decoration-info="environment == 'demo'"/>
+                <field name="state" widget="badge" decoration-success="state == 'ok'" decoration-danger="state == 'error'"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="credit" sum="Total"/>
+                <field name="unrealized_pnl" sum="Total"/>
+                <field name="equity" sum="Total"/>
+                <field name="last_sync"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_trading_broker_account_form" model="ir.ui.view">
+        <field name="name">trading.broker.account.form</field>
+        <field name="model">trading.broker.account</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_test_connection" type="object" string="Probar conexión" class="btn-primary"/>
+                    <button name="action_sync_portfolio" type="object" string="Sincronizar cartera"/>
+                    <button name="action_refresh_prices" type="object" string="Refrescar precios"/>
+                    <button name="action_open_import_wizard" type="object" string="Importar instrumentos"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_instruments" type="object" class="oe_stat_button" icon="fa-line-chart">
+                            <field name="instrument_count" widget="statinfo" string="Instrumentos"/>
+                        </button>
+                        <button name="action_view_mirrors" type="object" class="oe_stat_button" icon="fa-users" invisible="not mirror_count">
+                            <field name="mirror_count" widget="statinfo" string="Copias"/>
+                        </button>
+                        <button name="action_view_positions" type="object" class="oe_stat_button" icon="fa-briefcase">
+                            <field name="open_position_count" widget="statinfo" string="Abiertas"/>
+                        </button>
+                    </div>
+                    <widget name="web_ribbon" title="REAL" bg_color="text-bg-danger" invisible="environment != 'real'"/>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="p. ej. eToro demo"/></h1>
+                    </div>
+                    <div class="alert alert-danger" role="alert" invisible="state != 'error' or not last_error">
+                        <field name="last_error" nolabel="1"/>
+                    </div>
+                    <group>
+                        <group string="Conexión" name="connection">
+                            <field name="broker_type"/>
+                            <field name="environment" widget="radio" options="{'horizontal': true}"/>
+                            <field name="allow_real_orders" invisible="environment != 'real'"/>
+                            <field name="currency_id" options="{'no_create': True}"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="active" invisible="1"/>
+                        </group>
+                        <group string="Saldo">
+                            <field name="credit"/>
+                            <field name="unrealized_pnl"/>
+                            <field name="equity"/>
+                            <field name="last_sync"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Credenciales" name="credentials" groups="trading_base.group_trading_manager"/>
+                        <page string="Contabilidad (PGC)" name="accounting" groups="trading_base.group_trading_manager">
+                            <group>
+                                <field name="journal_id"/>
+                                <field name="broker_asset_account_id"/>
+                                <field name="gain_account_id"/>
+                                <field name="loss_account_id"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_trading_broker_account_search" model="ir.ui.view">
+        <field name="name">trading.broker.account.search</field>
+        <field name="model">trading.broker.account</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <filter name="demo" string="Demo" domain="[('environment', '=', 'demo')]"/>
+                <filter name="real" string="Real" domain="[('environment', '=', 'real')]"/>
+                <separator/>
+                <filter name="error" string="Con error" domain="[('state', '=', 'error')]"/>
+                <filter name="archived" string="Archivadas" domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_trading_broker_account" model="ir.actions.act_window">
+        <field name="name">Cuentas de broker</field>
+        <field name="res_model">trading.broker.account</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Cree su primera cuenta de broker</p>
+            <p>Empiece en demo; las órdenes reales requieren permiso explícito.</p>
+        </field>
+    </record>
+</odoo>

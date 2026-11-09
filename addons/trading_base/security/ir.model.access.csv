@@ -1,0 +1,15 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_trading_account_user,trading.broker.account.user,model_trading_broker_account,group_trading_user,1,0,0,0
+access_trading_account_manager,trading.broker.account.manager,model_trading_broker_account,group_trading_manager,1,1,1,1
+access_trading_instrument_user,trading.instrument.user,model_trading_instrument,group_trading_user,1,1,1,0
+access_trading_instrument_manager,trading.instrument.manager,model_trading_instrument,group_trading_manager,1,1,1,1
+access_trading_price_user,trading.price.user,model_trading_price,group_trading_user,1,1,1,0
+access_trading_price_manager,trading.price.manager,model_trading_price,group_trading_manager,1,1,1,1
+access_trading_position_user,trading.position.user,model_trading_position,group_trading_user,1,0,0,0
+access_trading_position_manager,trading.position.manager,model_trading_position,group_trading_manager,1,1,1,1
+access_trading_mirror_user,trading.mirror.user,model_trading_mirror,group_trading_user,1,0,0,0
+access_trading_mirror_manager,trading.mirror.manager,model_trading_mirror,group_trading_manager,1,1,1,1
+access_trading_order_user,trading.order.user,model_trading_order,group_trading_user,1,1,1,0
+access_trading_order_manager,trading.order.manager,model_trading_order,group_trading_manager,1,1,1,1
+access_trading_import_wizard_user,trading.instrument.import.wizard.user,model_trading_instrument_import_wizard,group_trading_user,1,1,1,1
+access_trading_chart_drawing_user,trading.chart.drawing.user,model_trading_chart_drawing,group_trading_user,1,1,1,1

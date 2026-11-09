@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="seq_trading_order" model="ir.sequence">
+            <field name="name">Órdenes de trading</field>
+            <field name="code">trading.order</field>
+            <field name="prefix">ORD/%(year)s/</field>
+            <field name="padding">5</field>
+            <field name="company_id" eval="False"/>
+        </record>
+
+        <record id="param_live_refresh_seconds" model="ir.config_parameter">
+            <field name="key">trading.live_refresh_seconds</field>
+            <field name="value">5</field>
+        </record>
+        <record id="param_chart_template" model="ir.config_parameter">
+            <field name="key">trading.chart_template</field>
+            <field name="value">es_pymes</field>
+        </record>
+
+        <record id="cron_trading_refresh_prices" model="ir.cron">
+            <field name="name">Trading: refrescar precios</field>
+            <field name="model_id" ref="model_trading_instrument"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_refresh_prices()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">minutes</field>
+        </record>
+        <record id="cron_trading_sync_portfolios" model="ir.cron">
+            <field name="name">Trading: sincronizar carteras</field>
+            <field name="model_id" ref="model_trading_broker_account"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_sync_portfolios()</field>
+            <field name="interval_number">15</field>
+            <field name="interval_type">minutes</field>
+        </record>
+        <record id="cron_trading_ecb_rates" model="ir.cron">
+            <field name="name">Trading: tipos de cambio del BCE</field>
+            <field name="model_id" ref="base.model_res_currency"/>
+            <field name="state">code</field>
+            <field name="code">model._cron_trading_ecb_rates()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,14 @@
+.o_trading_live_board {
+    .o_trading_row td {
+        transition: background-color 0.6s ease;
+    }
+    .o_trading_flash_up td {
+        background-color: rgba(25, 135, 84, 0.18);
+    }
+    .o_trading_flash_down td {
+        background-color: rgba(220, 53, 69, 0.18);
+    }
+    .card[role="button"]:hover {
+        box-shadow: 0 0 0 1px var(--bs-primary);
+    }
+}

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_trading_price_list" model="ir.ui.view">
+        <field name="name">trading.price.list</field>
+        <field name="model">trading.price</field>
+        <field name="arch" type="xml">
+            <list create="0">
+                <field name="instrument_id"/>
+                <field name="interval"/>
+                <field name="date"/>
+                <field name="open"/>
+                <field name="high"/>
+                <field name="low"/>
+                <field name="close"/>
+                <field name="volume"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_trading_price_graph" model="ir.ui.view">
+        <field name="name">trading.price.graph</field>
+        <field name="model">trading.price</field>
+        <field name="arch" type="xml">
+            <graph string="Precio" type="line" sample="1">
+                <field name="date" interval="day"/>
+                <field name="close" type="measure" operator="avg"/>
+            </graph>
+        </field>
+    </record>
+
+    <record id="view_trading_price_search" model="ir.ui.view">
+        <field name="name">trading.price.search</field>
+        <field name="model">trading.price</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="instrument_id"/>
+                <filter name="daily" string="Diarias" domain="[('interval', '=', 'OneDay')]"/>
+                <group>
+                    <filter name="group_instrument" string="Instrumento" context="{'group_by': 'instrument_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_trading_price" model="ir.actions.act_window">
+        <field name="name">Velas</field>
+        <field name="res_model">trading.price</field>
+        <field name="view_mode">graph,list</field>
+        <field name="context">{'search_default_daily': 1}</field>
+    </record>
+</odoo>

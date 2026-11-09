@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="trading_base.LiveBoard">
+        <div class="o_trading_live_board o_action h-100 overflow-auto p-3">
+            <div class="d-flex align-items-center gap-2 mb-3">
+                <h2 class="mb-0 me-auto">Panel en vivo</h2>
+                <span class="badge text-bg-light">
+                    <t t-if="state.paused">En pausa</t>
+                    <t t-elif="state.loading">Actualizando…</t>
+                    <t t-else="">Siguiente en <t t-esc="state.countdown"/> s</t>
+                </span>
+                <button class="btn btn-secondary btn-sm" t-on-click="togglePause">
+                    <i t-att-class="state.paused ? 'fa fa-play' : 'fa fa-pause'"/>
+                    <t t-if="state.paused"> Reanudar</t><t t-else=""> Pausar</t>
+                </button>
+                <button class="btn btn-primary btn-sm" t-on-click="refreshNow"><i class="fa fa-refresh"/> Ahora</button>
+            </div>
+
+            <div t-if="state.error" class="alert alert-danger" t-esc="state.error"/>
+
+            <div class="row g-2 mb-3">
+                <div t-foreach="state.data.accounts" t-as="acc" t-key="acc.id" class="col-12 col-md-6 col-xl-4">
+                    <div class="card h-100" t-on-click="() => this.openRecord('trading.broker.account', acc.id)" role="button">
+                        <div class="card-body py-2">
+                            <div class="d-flex justify-content-between">
+                                <strong t-esc="acc.name"/>
+                                <span t-attf-class="badge #{acc.environment == 'real' ? 'text-bg-danger' : 'text-bg-info'}" t-esc="acc.environment == 'real' ? 'REAL' : 'DEMO'"/>
+                            </div>
+                            <div class="small text-muted">Patrimonio <t t-esc="fmt(acc.equity)"/> <t t-esc="acc.currency"/> · Disponible <t t-esc="fmt(acc.credit)"/></div>
+                            <div t-attf-class="fs-5 #{signClass(acc.unrealized_pnl)}">
+                                <t t-esc="fmt(acc.unrealized_pnl)"/> <t t-esc="acc.currency"/>
+                            </div>
+                            <div t-if="acc.state == 'error'" class="small text-danger text-truncate" t-esc="acc.last_error"/>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h4>Seguimiento</h4>
+            <div class="table-responsive mb-4">
+                <table class="table table-sm table-hover align-middle">
+                    <thead><tr>
+                        <th>Símbolo</th><th class="d-none d-md-table-cell">Nombre</th>
+                        <th class="text-end">Compra</th><th class="text-end">Venta</th>
+                        <th class="text-end">Precio</th><th class="text-end">Var. %</th>
+                        <th class="d-none d-lg-table-cell">Hora (UTC)</th>
+                    </tr></thead>
+                    <tbody>
+                        <tr t-foreach="state.data.instruments" t-as="inst" t-key="inst.id"
+                            t-attf-class="o_trading_row #{state.flash[inst.id] ? 'o_trading_flash_' + state.flash[inst.id] : ''}"
+                            t-on-click="() => this.openRecord('trading.instrument', inst.id)" role="button">
+                            <td><strong t-esc="inst.symbol"/>
+                                <span t-if="inst.quote_type == 'delayed'" class="badge text-bg-warning ms-1">dif.</span></td>
+                            <td class="d-none d-md-table-cell text-muted" t-esc="inst.name"/>
+                            <td class="text-end" t-esc="fmt(inst.bid, priceDigits(inst.bid))"/>
+                            <td class="text-end" t-esc="fmt(inst.ask, priceDigits(inst.ask))"/>
+                            <td class="text-end fw-bold">
+                                <i t-if="inst.tick == 'up'" class="fa fa-caret-up text-success me-1"/>
+                                <i t-if="inst.tick == 'down'" class="fa fa-caret-down text-danger me-1"/>
+                                <t t-esc="fmt(inst.last_price, priceDigits(inst.last_price))"/>
+                            </td>
+                            <td t-attf-class="text-end #{signClass(inst.change_pct)}"><t t-esc="fmt(inst.change_pct)"/> %</td>
+                            <td class="d-none d-lg-table-cell small text-muted" t-esc="inst.price_date"/>
+                        </tr>
+                        <tr t-if="!state.data.instruments.length">
+                            <td colspan="7" class="text-muted">Sin instrumentos en seguimiento. Impórtelos desde Mercado › Importar instrumentos.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h4>Posiciones abiertas</h4>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle">
+                    <thead><tr>
+                        <th>Símbolo</th><th>Lado</th><th class="text-end">Importe</th>
+                        <th class="text-end">Apertura</th><th class="text-end">Actual</th><th class="text-end">P/L</th>
+                    </tr></thead>
+                    <tbody>
+                        <tr t-foreach="state.data.positions" t-as="pos" t-key="pos.id"
+                            t-on-click="() => this.openRecord('trading.position', pos.id)" role="button">
+                            <td><strong t-esc="pos.symbol"/> <span class="small text-muted" t-esc="pos.account"/>
+                                <span t-if="pos.mirror" class="badge text-bg-secondary ms-1"><i class="fa fa-users"/> <t t-esc="pos.mirror"/></span></td>
+                            <td><span t-attf-class="badge #{pos.side == 'buy' ? 'text-bg-success' : 'text-bg-warning'}" t-esc="pos.side == 'buy' ? 'Largo' : 'Corto'"/>
+                                <span t-if="pos.leverage &gt; 1" class="small ms-1">x<t t-esc="pos.leverage"/></span></td>
+                            <td class="text-end"><t t-esc="fmt(pos.amount)"/> <t t-esc="pos.currency"/></td>
+                            <td class="text-end" t-esc="fmt(pos.open_rate, priceDigits(pos.open_rate))"/>
+                            <td class="text-end" t-esc="fmt(pos.current_rate, priceDigits(pos.current_rate))"/>
+                            <td t-attf-class="text-end fw-bold #{signClass(pos.unrealized_pnl)}" t-esc="fmt(pos.unrealized_pnl)"/>
+                        </tr>
+                        <tr t-if="!state.data.positions.length"><td colspan="6" class="text-muted">No hay posiciones abiertas.</td></tr>
+                    </tbody>
+                    <tfoot t-if="state.data.positions.length"><tr>
+                        <th colspan="2">Total</th>
+                        <th class="text-end" t-esc="fmt(totals.invested)"/>
+                        <th colspan="2"/>
+                        <th t-attf-class="text-end #{signClass(totals.pnl)}" t-esc="fmt(totals.pnl)"/>
+                    </tr></tfoot>
+                </table>
+            </div>
+        </div>
+    </t>
+</templates>

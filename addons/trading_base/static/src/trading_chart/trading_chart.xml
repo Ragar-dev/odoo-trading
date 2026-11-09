@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="trading_base.TradingChart">
+        <div class="o_trading_chart w-100">
+            <div class="o_trading_chart_toolbar d-flex flex-wrap align-items-center gap-2 mb-2">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Intervalo">
+                    <t t-foreach="intervals" t-as="iv" t-key="iv.key">
+                        <button type="button" class="btn" t-att-class="state.interval === iv.key ? 'btn-primary' : 'btn-secondary'"
+                                t-on-click="() => this.setInterval(iv.key)" t-esc="iv.label"/>
+                    </t>
+                </div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Herramientas">
+                    <t t-foreach="tools" t-as="tool" t-key="tool.key">
+                        <button type="button" class="btn" t-att-class="state.tool === tool.key ? 'btn-primary' : 'btn-secondary'"
+                                t-att-title="tool.title" t-att-aria-label="tool.title" t-on-click="() => this.setTool(tool.key)">
+                            <i t-att-class="'fa ' + tool.icon"/>
+                        </button>
+                    </t>
+                </div>
+                <div class="d-flex gap-1 align-items-center" role="group" aria-label="Color">
+                    <t t-foreach="colors" t-as="color" t-key="color">
+                        <button type="button" class="o_trading_chart_swatch border-0 rounded-circle"
+                                t-att-class="{'o_selected': state.color === color}"
+                                t-att-style="'background-color: ' + color" t-att-title="color" t-att-aria-label="color"
+                                t-on-click="() => this.setColor(color)"/>
+                    </t>
+                </div>
+                <input t-if="state.tool === 'text' or state.tool === 'hline'" type="text"
+                       class="form-control form-control-sm o_trading_chart_note"
+                       t-att-placeholder="state.tool === 'text' ? 'Texto de la nota' : 'Etiqueta (opcional)'"
+                       t-model="state.noteText"/>
+                <button type="button" class="btn btn-sm btn-link text-danger" title="Borrar todos los dibujos"
+                        t-att-disabled="!state.count" t-on-click="() => this.clearAll()">
+                    <i class="fa fa-trash me-1"/>Borrar todo
+                </button>
+                <button type="button" class="btn btn-sm" t-att-class="state.marksPanel ? 'btn-primary' : 'btn-secondary'"
+                        title="Marcas de las posiciones" t-on-click="() => this.toggleMarksPanel()">
+                    <i class="fa fa-flag me-1"/>Marcas
+                </button>
+                <button type="button" class="btn btn-sm btn-link" title="Volver al rango por defecto" t-on-click="() => this.resetRange()">
+                    <i class="fa fa-arrows-alt"/>
+                </button>
+                <button type="button" class="btn btn-sm btn-link" title="Recargar velas" t-on-click="() => this.reload()">
+                    <i class="fa fa-refresh" t-att-class="{'fa-spin': state.loading}"/>
+                </button>
+                <span class="ms-auto small text-muted" t-esc="hint"/>
+            </div>
+            <div t-if="state.marksPanel" class="o_trading_chart_marks d-flex flex-wrap align-items-center gap-3 border rounded p-2 mb-2 small">
+                <label class="d-flex align-items-center gap-1 mb-0">
+                    <input type="checkbox" class="form-check-input mt-0" t-att-checked="state.prefs.show_markers"
+                           t-on-change="(ev) => this.setPref('show_markers', ev.target.checked)"/>
+                    Flechas de compra y venta
+                </label>
+                <label class="d-flex align-items-center gap-1 mb-0">
+                    Compra
+                    <input type="color" class="o_trading_chart_color" t-att-value="state.prefs.buy_color"
+                           t-att-disabled="!state.prefs.show_markers"
+                           t-on-input="(ev) => this.setPref('buy_color', ev.target.value)"/>
+                </label>
+                <label class="d-flex align-items-center gap-1 mb-0">
+                    Venta
+                    <input type="color" class="o_trading_chart_color" t-att-value="state.prefs.sell_color"
+                           t-att-disabled="!state.prefs.show_markers"
+                           t-on-input="(ev) => this.setPref('sell_color', ev.target.value)"/>
+                </label>
+                <label class="d-flex align-items-center gap-1 mb-0">
+                    Tamaño
+                    <select class="form-select form-select-sm w-auto" t-att-disabled="!state.prefs.show_markers"
+                            t-on-change="(ev) => this.setMarkerSize(ev)">
+                        <option value="1" t-att-selected="state.prefs.marker_size === 1">Normal</option>
+                        <option value="2" t-att-selected="state.prefs.marker_size === 2">Grande</option>
+                        <option value="3" t-att-selected="state.prefs.marker_size === 3">Muy grande</option>
+                    </select>
+                </label>
+                <label class="d-flex align-items-center gap-1 mb-0">
+                    <input type="checkbox" class="form-check-input mt-0" t-att-checked="state.prefs.show_lines"
+                           t-on-change="(ev) => this.setPref('show_lines', ev.target.checked)"/>
+                    Líneas de entrada, stop y TP
+                </label>
+            </div>
+            <div t-if="state.error" class="alert alert-warning py-1 px-2 small mb-2" t-esc="state.error"/>
+            <div t-if="state.empty and !state.loading and !state.error" class="text-muted small mb-2">
+                No hay velas para este intervalo.
+            </div>
+            <div t-ref="chart" class="o_trading_chart_canvas border rounded"
+                 t-att-class="{'o_trading_chart_drawing': state.tool !== 'cursor'}"/>
+        </div>
+    </t>
+</templates>

@@ -1,0 +1,33 @@
+{
+    'name': 'Trading (base)',
+    'version': '19.0.1.0.0',
+    'summary': 'Gestión de trading: brokers, instrumentos, posiciones, órdenes y precios en vivo',
+    'category': 'Trading',
+    'author': 'Raúl',
+    'license': 'LGPL-3',
+    'depends': ['mail', 'account', 'l10n_es'],
+    'external_dependencies': {'python': ['requests']},
+    'data': [
+        'security/trading_security.xml',
+        'security/ir.model.access.csv',
+        'data/trading_data.xml',
+        'views/broker_account_views.xml',
+        'views/instrument_views.xml',
+        'views/price_views.xml',
+        'views/position_views.xml',
+        'views/mirror_views.xml',
+        'views/order_views.xml',
+        'wizards/instrument_import_wizard_views.xml',
+        'views/menus.xml',
+    ],
+    'assets': {
+        'web.assets_backend': [
+            'trading_base/static/src/live_board/*',
+            'trading_base/static/src/tradingview_chart/*',
+            'trading_base/static/src/trading_chart/*',
+        ],
+    },
+    'post_init_hook': 'post_init_hook',
+    'application': True,
+    'installable': True,
+}

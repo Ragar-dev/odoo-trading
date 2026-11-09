@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_trading_position_list" model="ir.ui.view">
+        <field name="name">trading.position.list</field>
+        <field name="model">trading.position</field>
+        <field name="arch" type="xml">
+            <list decoration-muted="state == 'closed'">
+                <header>
+                    <button name="action_create_move" type="object" string="Contabilizar" groups="trading_base.group_trading_manager"/>
+                </header>
+                <field name="instrument_id" optional="show"/>
+                <field name="account_id" optional="show"/>
+                <field name="mirror_id" optional="show"/>
+                <field name="side" optional="show" widget="badge" decoration-success="side == 'buy'" decoration-warning="side == 'sell'"/>
+                <field name="open_date" optional="show"/>
+                <field name="units" optional="show"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="company_currency_id" column_invisible="1"/>
+                <field name="amount" optional="show" sum="Total"/>
+                <field name="leverage" optional="show"/>
+                <field name="open_rate" optional="show"/>
+                <field name="current_rate" optional="show"/>
+                <field name="unrealized_pnl" optional="show" sum="Total" decoration-success="unrealized_pnl &gt; 0" decoration-danger="unrealized_pnl &lt; 0"/>
+                <field name="current_value" optional="show" sum="Total" decoration-success="current_value &gt; amount" decoration-danger="current_value &lt; amount"/>
+                <field name="realized_pnl" sum="Total" optional="show"/>
+                <field name="realized_pnl_company" sum="Total" optional="hide"/>
+                <field name="tax_class" optional="hide"/>
+                <field name="state" optional="show" widget="badge"/>
+                <field name="move_id" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_trading_position_form" model="ir.ui.view">
+        <field name="name">trading.position.form</field>
+        <field name="model">trading.position</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_close_position" type="object" string="Cerrar en el broker" class="btn-primary"
+                            invisible="state != 'open' or not broker_ref or mirror_id" groups="trading_base.group_trading_manager"
+                            confirm="Se enviará una orden de cierre a mercado al broker. ¿Continuar?"/>
+                    <button name="action_close_manual" type="object" string="Cerrar (manual)"
+                            invisible="state != 'open' or broker_ref" groups="trading_base.group_trading_manager"/>
+                    <button name="action_create_move" type="object" string="Contabilizar"
+                            invisible="state != 'closed' or move_id" groups="trading_base.group_trading_manager"/>
+                    <field name="state" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_move" type="object" class="oe_stat_button" icon="fa-book"
+                                string="Asiento" invisible="not move_id"/>
+                    </div>
+                    <div class="alert alert-warning" role="alert" invisible="not close_estimated">
+                        Cierre estimado: el broker dejó de devolver la posición y se usó el último precio conocido.
+                    </div>
+                    <div class="oe_title"><h1><field name="name" readonly="1"/></h1></div>
+                    <group>
+                        <group string="Apertura">
+                            <field name="account_id"/>
+                            <field name="instrument_id"/>
+                            <field name="broker_ref"/>
+                            <field name="mirror_id" invisible="not mirror_id"/>
+                            <field name="side"/>
+                            <field name="open_date"/>
+                            <field name="open_rate"/>
+                            <field name="units"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="company_currency_id" invisible="1"/>
+                            <field name="amount"/>
+                            <field name="leverage"/>
+                            <field name="stop_loss"/>
+                            <field name="take_profit"/>
+                            <field name="fees"/>
+                        </group>
+                        <group string="Resultado">
+                            <field name="current_rate" invisible="state != 'open'"/>
+                            <field name="unrealized_pnl" invisible="state != 'open'"/>
+                            <field name="current_value" class="fw-bold"/>
+                            <field name="broker_pnl" invisible="state != 'open'"/>
+                            <field name="close_date"/>
+                            <field name="close_rate"/>
+                            <field name="close_estimated" invisible="1"/>
+                            <field name="realized_pnl"/>
+                            <field name="realized_pnl_company"/>
+                            <field name="tax_class"/>
+                            <field name="fiscal_year" invisible="not fiscal_year"/>
+                            <field name="move_id"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Gráfica" name="chart">
+                            <widget name="trading_chart"/>
+                        </page>
+                        <page string="TradingView" name="tradingview" invisible="not tradingview_symbol">
+                            <field name="tradingview_symbol" widget="tradingview_chart" nolabel="1" readonly="1" class="d-block w-100"/>
+                        </page>
+                    </notebook>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_trading_position_pivot" model="ir.ui.view">
+        <field name="name">trading.position.pivot</field>
+        <field name="model">trading.position</field>
+        <field name="arch" type="xml">
+            <pivot string="Resultados">
+                <field name="fiscal_year" type="row"/>
+                <field name="tax_class" type="col"/>
+                <field name="realized_pnl_company" type="measure"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_trading_position_search" model="ir.ui.view">
+        <field name="name">trading.position.search</field>
+        <field name="model">trading.position</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="instrument_id"/>
+                <field name="account_id"/>
+                <filter name="open" string="Abiertas" domain="[('state', '=', 'open')]"/>
+                <filter name="closed" string="Cerradas" domain="[('state', '=', 'closed')]"/>
+                <separator/>
+                <filter name="not_posted" string="Sin contabilizar" domain="[('state', '=', 'closed'), ('move_id', '=', False)]"/>
+                <filter name="pnl_positive" string="P/L positivo"
+                        domain="['|', '&amp;', ('state', '=', 'open'), ('unrealized_pnl', '&gt;', 0), '&amp;', ('state', '=', 'closed'), ('realized_pnl', '&gt;', 0)]"/>
+                <filter name="pnl_negative" string="P/L negativo"
+                        domain="['|', '&amp;', ('state', '=', 'open'), ('unrealized_pnl', '&lt;', 0), '&amp;', ('state', '=', 'closed'), ('realized_pnl', '&lt;', 0)]"/>
+                <separator/>
+                <filter name="own" string="Directas" domain="[('mirror_id', '=', False)]"/>
+                <filter name="copied" string="En carteras copiadas" domain="[('mirror_id', '!=', False)]"/>
+                <separator/>
+                <filter name="estimated" string="Cierre estimado" domain="[('close_estimated', '=', True)]"/>
+                <group>
+                    <filter name="group_year" string="Ejercicio" context="{'group_by': 'fiscal_year'}"/>
+                    <filter name="group_tax" string="Clase fiscal" context="{'group_by': 'tax_class'}"/>
+                    <filter name="group_mirror" string="Cartera copiada" context="{'group_by': 'mirror_id'}"/>
+                    <filter name="group_instrument" string="Instrumento" context="{'group_by': 'instrument_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_trading_position" model="ir.actions.act_window">
+        <field name="name">Posiciones</field>
+        <field name="res_model">trading.position</field>
+        <field name="view_mode">list,form,pivot</field>
+        <field name="context">{'search_default_open': 1}</field>
+    </record>
+
+    <record id="action_trading_position_tax" model="ir.actions.act_window">
+        <field name="name">Resultados fiscales (IRPF)</field>
+        <field name="res_model">trading.position</field>
+        <field name="view_mode">pivot,list</field>
+        <field name="context">{'search_default_closed': 1}</field>
+    </record>
+</odoo>

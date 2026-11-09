@@ -1,0 +1,36 @@
+.o_trading_chart {
+    .o_trading_chart_canvas {
+        height: 520px;
+        position: relative;
+        overflow: hidden;
+    }
+    .o_trading_chart_drawing {
+        cursor: crosshair;
+    }
+    .o_trading_chart_swatch {
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        outline-offset: 2px;
+        &.o_selected {
+            outline: 2px solid $o-brand-primary;
+        }
+    }
+    .o_trading_chart_color {
+        width: 28px;
+        height: 22px;
+        padding: 0;
+        border: 0;
+        background: none;
+        cursor: pointer;
+    }
+    .o_trading_chart_note {
+        width: 180px;
+    }
+}
+
+@include media-breakpoint-down(md) {
+    .o_trading_chart .o_trading_chart_canvas {
+        height: 380px;
+    }
+}

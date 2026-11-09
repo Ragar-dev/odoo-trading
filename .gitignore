@@ -1,0 +1,15 @@
+# Configuración local (contiene la contraseña maestra de Odoo)
+config/odoo.conf
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Entorno y sistema
+.env
+.DS_Store
+.vscode/
+.idea/
+
+# Documentación interna de agentes
+.agent/

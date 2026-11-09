@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+    <t t-name="trading_base.TradingViewChart">
+        <div class="o_tradingview_chart w-100">
+            <t t-if="symbol">
+                <div class="d-flex justify-content-between align-items-center mb-1 small text-muted">
+                    <span>TradingView · <span class="fw-bold" t-esc="symbol"/></span>
+                    <a t-att-href="externalUrl" target="_blank" rel="noopener noreferrer">
+                        <i class="fa fa-external-link me-1"/>Abrir en TradingView
+                    </a>
+                </div>
+                <iframe t-att-src="src" t-key="symbol" class="o_tradingview_frame w-100 border rounded"
+                        allowtransparency="true" allowfullscreen="true" loading="lazy"/>
+            </t>
+        </div>
+    </t>
+</templates>

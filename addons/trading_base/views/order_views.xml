@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_trading_order_list" model="ir.ui.view">
+        <field name="name">trading.order.list</field>
+        <field name="model">trading.order</field>
+        <field name="arch" type="xml">
+            <list decoration-danger="state == 'error'" decoration-muted="state == 'cancel'">
+                <field name="name"/>
+                <field name="account_id"/>
+                <field name="environment" widget="badge" decoration-danger="environment == 'real'"/>
+                <field name="instrument_id"/>
+                <field name="side"/>
+                <field name="currency_id" column_invisible="1"/>
+                <field name="amount"/>
+                <field name="units"/>
+                <field name="leverage"/>
+                <field name="state" widget="badge" decoration-success="state == 'sent'" decoration-danger="state == 'error'"/>
+                <field name="sent_date"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_trading_order_form" model="ir.ui.view">
+        <field name="name">trading.order.form</field>
+        <field name="model">trading.order</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_send" type="object" string="Enviar al broker" class="btn-primary"
+                            invisible="state not in ('draft', 'error')" groups="trading_base.group_trading_manager"
+                            confirm="Se enviará una orden a mercado al broker. ¿Continuar?"/>
+                    <button name="action_cancel" type="object" string="Cancelar" invisible="state not in ('draft', 'error')"/>
+                    <button name="action_draft" type="object" string="Volver a borrador" invisible="state not in ('cancel', 'error')"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,sent"/>
+                </header>
+                <sheet>
+                    <widget name="web_ribbon" title="REAL" bg_color="text-bg-danger" invisible="environment != 'real'"/>
+                    <div class="alert alert-danger" role="alert" invisible="state != 'error'">
+                        <field name="error_message" nolabel="1"/>
+                    </div>
+                    <div class="oe_title"><h1><field name="name"/></h1></div>
+                    <group>
+                        <group>
+                            <field name="account_id" readonly="state != 'draft'"/>
+                            <field name="environment"/>
+                            <field name="instrument_id" readonly="state != 'draft'"/>
+                            <field name="side" widget="radio" options="{'horizontal': true}" readonly="state != 'draft'"/>
+                        </group>
+                        <group>
+                            <field name="size_mode" widget="radio" options="{'horizontal': true}" readonly="state != 'draft'"/>
+                            <field name="currency_id" invisible="1"/>
+                            <field name="amount" invisible="size_mode != 'amount'" readonly="state != 'draft'"/>
+                            <field name="units" invisible="size_mode != 'units'" readonly="state != 'draft'"/>
+                            <field name="leverage" readonly="state != 'draft'"/>
+                            <field name="stop_loss" readonly="state != 'draft'"/>
+                            <field name="take_profit" readonly="state != 'draft'"/>
+                        </group>
+                    </group>
+                    <group invisible="not broker_order_id">
+                        <field name="broker_order_id"/>
+                        <field name="sent_date"/>
+                    </group>
+                </sheet>
+                <chatter/>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_trading_order_search" model="ir.ui.view">
+        <field name="name">trading.order.search</field>
+        <field name="model">trading.order</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="instrument_id"/>
+                <filter name="draft" string="Borrador" domain="[('state', '=', 'draft')]"/>
+                <filter name="sent" string="Enviadas" domain="[('state', '=', 'sent')]"/>
+                <filter name="error" string="Con error" domain="[('state', '=', 'error')]"/>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_trading_order" model="ir.actions.act_window">
+        <field name="name">Órdenes</field>
+        <field name="res_model">trading.order</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

@@ -1,0 +1,15 @@
+.o_field_tradingview_chart {
+    display: block;
+    width: 100%;
+}
+
+.o_tradingview_chart .o_tradingview_frame {
+    height: 520px;
+    min-height: 360px;
+}
+
+@include media-breakpoint-down(md) {
+    .o_tradingview_chart .o_tradingview_frame {
+        height: 380px;
+    }
+}

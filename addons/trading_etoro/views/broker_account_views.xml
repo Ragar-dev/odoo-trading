@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_trading_broker_account_form_etoro" model="ir.ui.view">
+        <field name="name">trading.broker.account.form.etoro</field>
+        <field name="model">trading.broker.account</field>
+        <field name="inherit_id" ref="trading_base.view_trading_broker_account_form"/>
+        <field name="arch" type="xml">
+            <page name="credentials" position="inside">
+                <group invisible="broker_type != 'etoro'">
+                    <field name="etoro_api_key" password="True"/>
+                    <field name="etoro_user_key" password="True"/>
+                </group>
+                <div class="text-muted" invisible="broker_type != 'etoro'">
+                    Claves de la API pública de eToro (Ajustes › Trading › API). Empiece con claves del entorno demo.
+                </div>
+            </page>
+        </field>
+    </record>
+</odoo>

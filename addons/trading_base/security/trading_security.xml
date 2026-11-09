@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="module_category_trading" model="ir.module.category">
+        <field name="name">Trading</field>
+        <field name="sequence">60</field>
+    </record>
+
+    <record id="res_groups_privilege_trading" model="res.groups.privilege">
+        <field name="name">Trading</field>
+        <field name="category_id" ref="module_category_trading"/>
+        <field name="sequence">10</field>
+    </record>
+
+    <record id="group_trading_user" model="res.groups">
+        <field name="name">Usuario</field>
+        <field name="sequence">10</field>
+        <field name="comment">Consulta cuentas, cartera y precios; prepara órdenes.</field>
+        <field name="privilege_id" ref="res_groups_privilege_trading"/>
+        <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <record id="group_trading_manager" model="res.groups">
+        <field name="name">Gestor</field>
+        <field name="sequence">20</field>
+        <field name="comment">Configura cuentas y credenciales, envía órdenes y contabiliza.</field>
+        <field name="privilege_id" ref="res_groups_privilege_trading"/>
+        <field name="implied_ids" eval="[(4, ref('group_trading_user'))]"/>
+    </record>
+
+    <record id="base.group_system" model="res.groups">
+        <field name="implied_ids" eval="[(4, ref('group_trading_manager'))]"/>
+    </record>
+
+    <!-- Multicompañía -->
+    <record id="rule_trading_account_company" model="ir.rule">
+        <field name="name">Trading: cuentas por compañía</field>
+        <field name="model_id" ref="model_trading_broker_account"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="rule_trading_instrument_company" model="ir.rule">
+        <field name="name">Trading: instrumentos por compañía</field>
+        <field name="model_id" ref="model_trading_instrument"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="rule_trading_price_company" model="ir.rule">
+        <field name="name">Trading: velas por compañía</field>
+        <field name="model_id" ref="model_trading_price"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="rule_trading_position_company" model="ir.rule">
+        <field name="name">Trading: posiciones por compañía</field>
+        <field name="model_id" ref="model_trading_position"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="rule_trading_mirror_company" model="ir.rule">
+        <field name="name">Trading: carteras copiadas por compañía</field>
+        <field name="model_id" ref="model_trading_mirror"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="rule_trading_order_company" model="ir.rule">
+        <field name="name">Trading: órdenes por compañía</field>
+        <field name="model_id" ref="model_trading_order"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+    <record id="rule_trading_chart_drawing_company" model="ir.rule">
+        <field name="name">Trading: dibujos por compañía</field>
+        <field name="model_id" ref="model_trading_chart_drawing"/>
+        <field name="domain_force">[('company_id', 'in', company_ids)]</field>
+    </record>
+</odoo>
