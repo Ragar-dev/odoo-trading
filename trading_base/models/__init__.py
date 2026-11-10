@@ -8,3 +8,4 @@ from . import position
 from . import order
 from . import res_currency
 from . import res_users
+from . import income

@@ -58,6 +58,10 @@
                             <field name="currency_id" options="{'no_create': True}"/>
                             <field name="company_id" groups="base.group_multi_company"/>
                             <field name="active" invisible="1"/>
+                            <field name="stream_state" widget="badge" invisible="broker_type == 'manual'"
+                                   decoration-success="stream_state == 'live'" decoration-danger="stream_state == 'error'"/>
+                            <field name="stream_seen_at" invisible="broker_type == 'manual' or not stream_seen_at"/>
+                            <field name="stream_message" invisible="not stream_message"/>
                         </group>
                         <group string="Saldo">
                             <field name="credit"/>

@@ -6,7 +6,11 @@
     'author': 'Raúl',
     'license': 'LGPL-3',
     'depends': ['trading_base'],
-    'external_dependencies': {'python': ['requests']},
-    'data': ['views/broker_account_views.xml'],
+    'external_dependencies': {'python': ['requests', 'openpyxl']},
+    'data': [
+        'security/ir.model.access.csv',
+        'views/broker_account_views.xml',
+        'wizards/statement_import_views.xml',
+    ],
     'installable': True,
 }

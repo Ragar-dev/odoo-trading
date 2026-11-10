@@ -27,6 +27,10 @@
     <menuitem id="menu_trading_reporting" name="Informes" parent="menu_trading_root" sequence="30"/>
     <menuitem id="menu_trading_tax" name="Resultados fiscales" parent="menu_trading_reporting"
               action="action_trading_position_tax" sequence="1"/>
+    <menuitem id="menu_trading_tax_pdf" name="Informe para la renta (PDF)" parent="menu_trading_reporting"
+              action="action_trading_tax_report_wizard" sequence="2"/>
+    <menuitem id="menu_trading_income" name="Dividendos e intereses" parent="menu_trading_reporting"
+              action="action_trading_income" sequence="3"/>
     <menuitem id="menu_trading_config" name="Configuración" parent="menu_trading_root" sequence="90"
               groups="trading_base.group_trading_manager"/>
     <menuitem id="menu_trading_accounts" name="Cuentas de broker" parent="menu_trading_config"

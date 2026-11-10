@@ -9,6 +9,7 @@
                 <group invisible="broker_type != 'etoro'">
                     <field name="etoro_api_key" password="True"/>
                     <field name="etoro_user_key" password="True"/>
+                    <field name="etoro_stream"/>
                 </group>
                 <div class="text-muted" invisible="broker_type != 'etoro'">
                     Claves de la API pública de eToro (Ajustes › Trading › API). Empiece con claves del entorno demo.

@@ -4,8 +4,10 @@
         <field name="name">trading.position.list</field>
         <field name="model">trading.position</field>
         <field name="arch" type="xml">
-            <list decoration-muted="state == 'closed'">
+            <list decoration-muted="state == 'closed'" js_class="trading_position_list">
                 <header>
+                    <button name="action_refresh_from_broker" type="object" string="Actualizar ahora" icon="fa-refresh"
+                            display="always" class="btn-secondary"/>
                     <button name="action_create_move" type="object" string="Contabilizar" groups="trading_base.group_trading_manager"/>
                 </header>
                 <field name="instrument_id" optional="show"/>
@@ -24,8 +26,12 @@
                 <field name="current_value" optional="show" sum="Total" decoration-success="current_value &gt; amount" decoration-danger="current_value &lt; amount"/>
                 <field name="realized_pnl" sum="Total" optional="show"/>
                 <field name="realized_pnl_company" sum="Total" optional="hide"/>
+                <field name="tax_estimate" sum="Total" optional="show"/>
+                <field name="net_after_tax" sum="Total" optional="show" decoration-success="net_after_tax &gt; 0" decoration-danger="net_after_tax &lt; 0"/>
                 <field name="tax_class" optional="hide"/>
                 <field name="state" optional="show" widget="badge"/>
+                <field name="broker_confirmed" optional="hide"/>
+                <field name="close_estimated" optional="hide"/>
                 <field name="move_id" optional="hide"/>
             </list>
         </field>
@@ -35,8 +41,9 @@
         <field name="name">trading.position.form</field>
         <field name="model">trading.position</field>
         <field name="arch" type="xml">
-            <form>
+            <form js_class="trading_position_form">
                 <header>
+                    <button name="action_refresh_from_broker" type="object" string="Actualizar ahora" icon="fa-refresh"/>
                     <button name="action_close_position" type="object" string="Cerrar en el broker" class="btn-primary"
                             invisible="state != 'open' or not broker_ref or mirror_id" groups="trading_base.group_trading_manager"
                             confirm="Se enviará una orden de cierre a mercado al broker. ¿Continuar?"/>
@@ -81,8 +88,12 @@
                             <field name="close_date"/>
                             <field name="close_rate"/>
                             <field name="close_estimated" invisible="1"/>
+                            <field name="broker_confirmed" invisible="state != 'closed'"/>
                             <field name="realized_pnl"/>
                             <field name="realized_pnl_company"/>
+                            <field name="tax_rate_applied" string="% IRPF aplicado"/>
+                            <field name="tax_estimate"/>
+                            <field name="net_after_tax" class="fw-bold"/>
                             <field name="tax_class"/>
                             <field name="fiscal_year" invisible="not fiscal_year"/>
                             <field name="move_id"/>
@@ -134,6 +145,7 @@
                 <filter name="copied" string="En carteras copiadas" domain="[('mirror_id', '!=', False)]"/>
                 <separator/>
                 <filter name="estimated" string="Cierre estimado" domain="[('close_estimated', '=', True)]"/>
+                <filter name="confirmed" string="Confirmadas con extracto" domain="[('broker_confirmed', '=', True)]"/>
                 <group>
                     <filter name="group_year" string="Ejercicio" context="{'group_by': 'fiscal_year'}"/>
                     <filter name="group_tax" string="Clase fiscal" context="{'group_by': 'tax_class'}"/>

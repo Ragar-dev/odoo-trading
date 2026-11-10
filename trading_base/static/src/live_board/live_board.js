@@ -1,6 +1,7 @@
 import { Component, useState, onWillStart, onMounted, onWillUnmount } from "@odoo/owl";
 import { registry } from "@web/core/registry";
 import { useService } from "@web/core/utils/hooks";
+import { useTradingLive } from "../live/trading_live_service";
 
 export class LiveBoard extends Component {
     static template = "trading_base.LiveBoard";
@@ -23,6 +24,16 @@ export class LiveBoard extends Component {
             this.timer = setInterval(() => this.tick(), 1000);
         });
         onWillUnmount(() => clearInterval(this.timer));
+        // Con el directo activo, cada precio o cambio de cartera recarga el panel (como mucho una vez por segundo).
+        useTradingLive(() => {
+            if (!this.state.paused && !this.state.loading && !document.hidden) {
+                this.load();
+            }
+        }, 1000);
+    }
+
+    get isStreaming() {
+        return this.state.data.accounts.some((a) => a.stream_live);
     }
 
     async tick() {

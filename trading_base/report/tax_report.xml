@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="paperformat_trading_tax" model="report.paperformat">
+        <field name="name">Trading: A4 apaisado</field>
+        <field name="format">A4</field>
+        <field name="orientation">Landscape</field>
+        <field name="margin_top">40</field>
+        <field name="margin_bottom">15</field>
+        <field name="margin_left">8</field>
+        <field name="margin_right">8</field>
+        <field name="header_spacing">35</field>
+        <field name="dpi">90</field>
+    </record>
+
+    <record id="action_report_trading_tax" model="ir.actions.report">
+        <field name="name">Informe para la renta</field>
+        <field name="model">trading.tax.report.wizard</field>
+        <field name="report_type">qweb-pdf</field>
+        <field name="report_name">trading_base.report_tax_year</field>
+        <field name="report_file">trading_base.report_tax_year</field>
+        <field name="print_report_name">'Informe renta trading %s' % (object.year)</field>
+        <field name="paperformat_id" ref="paperformat_trading_tax"/>
+    </record>
+
+    <template id="report_tax_year">
+        <t t-call="web.html_container">
+            <t t-call="web.external_layout">
+                <t t-set="o" t-value="company"/>
+                <div class="page o_trading_tax_report" style="font-size: 10.5px;">
+                    <h3>Informe para la renta · Ejercicio <t t-esc="year"/></h3>
+                    <p class="text-muted mb-2">
+                        <t t-esc="company.name"/>
+                        <t t-if="accounts"> · Cuentas: <t t-esc="', '.join(accounts.mapped('name'))"/></t>
+                        · Importes en <t t-esc="currency.name"/> al cambio del BCE de cada fecha
+                        · Horas de <t t-esc="tz_name"/> · Generado el <t t-esc="printed_at"/>
+                    </p>
+
+                    <div t-if="warnings" class="alert alert-warning p-2 mb-3" role="alert">
+                        <strong>Revise antes de declarar:</strong>
+                        <ul class="mb-0">
+                            <li t-foreach="warnings" t-as="w" t-esc="w"/>
+                        </ul>
+                    </div>
+
+                    <h5>1. Resumen para la declaración</h5>
+                    <table class="table table-sm table-bordered mb-1">
+                        <thead>
+                            <tr>
+                                <th>Concepto</th>
+                                <th class="text-end">Nº</th>
+                                <th class="text-end">Valor de transmisión</th>
+                                <th class="text-end">Valor de adquisición</th>
+                                <th class="text-end">Ganancias</th>
+                                <th class="text-end">Pérdidas</th>
+                                <th class="text-end">Resultado computable</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Acciones y ETF</strong><div class="text-muted" t-esc="sections['securities']"/></td>
+                                <td class="text-end" t-esc="sec_block['count']"/>
+                                <td class="text-end" t-esc="sec_block['transmission']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="sec_block['acquisition']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="sec_block['gains']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="sec_block['losses']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end fw-bold" t-esc="sec_block['net']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                            </tr>
+                            <tr>
+                                <td><strong>Criptoactivos</strong><div class="text-muted" t-esc="sections['crypto']"/></td>
+                                <td class="text-end" t-esc="crypto_block['count']"/>
+                                <td class="text-end" t-esc="crypto_block['transmission']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="crypto_block['acquisition']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="crypto_block['gains']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="crypto_block['losses']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end fw-bold" t-esc="crypto_block['net']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                            </tr>
+                            <tr>
+                                <td><strong>Derivados / CFD</strong><div class="text-muted" t-esc="sections['cfd']"/></td>
+                                <td class="text-end" t-esc="cfd_block['count']"/>
+                                <td class="text-end">—</td>
+                                <td class="text-end">—</td>
+                                <td class="text-end" t-esc="cfd_block['gains']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="cfd_block['losses']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end fw-bold" t-esc="cfd_block['net']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                            </tr>
+                            <tr class="fw-bold">
+                                <td colspan="6">Saldo neto de ganancias y pérdidas patrimoniales (base del ahorro)</td>
+                                <td class="text-end" t-esc="gains_net" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p t-if="sec_block['deferred']" class="text-muted mb-1">
+                        Pérdidas de acciones no computables este año por la regla de los dos meses:
+                        <t t-esc="sec_block['deferred']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>.
+                    </p>
+
+                    <table class="table table-sm table-bordered mb-1 mt-2">
+                        <thead>
+                            <tr>
+                                <th>Rendimientos del capital mobiliario</th>
+                                <th class="text-end">Nº</th>
+                                <th class="text-end">Ingresos íntegros</th>
+                                <th class="text-end">Retención en origen</th>
+                                <th class="text-end">Deducción doble imposición (máx.)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><strong>Dividendos</strong><div class="text-muted" t-esc="sections['dividend']"/></td>
+                                <td class="text-end" t-esc="div_block['count']"/>
+                                <td class="text-end" t-esc="div_block['gross']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="div_block['withholding']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end fw-bold" t-esc="div_block['deduction']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                            </tr>
+                            <tr>
+                                <td><strong>Intereses</strong><div class="text-muted" t-esc="sections['interest']"/></td>
+                                <td class="text-end" t-esc="int_block['count']"/>
+                                <td class="text-end" t-esc="int_block['gross']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="int_block['withholding']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end">—</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="text-muted mb-3">
+                        Todo se integra en la base imponible del ahorro. Si el saldo de ganancias y pérdidas es negativo,
+                        puede compensarse con hasta el 25 % de los rendimientos del capital mobiliario del año, y lo que
+                        sobre, en los cuatro ejercicios siguientes. La deducción por doble imposición se limita al
+                        <t t-esc="'%.0f' % treaty_rate"/> % del bruto (tipo habitual de los convenios, p. ej. EE. UU. con el
+                        formulario W-8BEN). Estas operaciones no aparecen en el borrador de la Agencia Tributaria: hay que
+                        añadirlas a mano. La clasificación es orientativa; revísela con su asesor.
+                    </p>
+
+                    <h5>2. Resultado neto después de impuestos (estimación)</h5>
+                    <t t-set="n" t-value="after_tax"/>
+                    <table class="table table-sm table-bordered mb-1" style="width: 70%;">
+                        <tbody>
+                            <tr><td>Saldo de ganancias y pérdidas patrimoniales</td><td class="text-end" t-esc="gains_net" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr><td>Rendimientos del capital mobiliario (dividendos e intereses íntegros)</td><td class="text-end" t-esc="capital_net" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr class="fw-bold"><td>Resultado antes de impuestos</td><td class="text-end" t-esc="n['gross_result']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr t-if="n['compensation']"><td>Pérdidas compensadas con rendimientos (máx. 25 %)</td><td class="text-end" t-esc="-n['compensation']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr t-if="n['carry_forward']"><td>Pérdidas pendientes para los 4 años siguientes</td><td class="text-end" t-esc="n['carry_forward']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr><td>Base del ahorro atribuible al trading</td><td class="text-end" t-esc="n['base']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr t-if="n['other_savings']"><td>Otras rentas del ahorro indicadas (para fijar el tramo)</td><td class="text-end" t-esc="n['other_savings']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr><td>Cuota del ahorro atribuible (escala del ahorro)</td><td class="text-end" t-esc="-n['tax_gross']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr t-if="n['deduction']"><td>Deducción por doble imposición internacional</td><td class="text-end" t-esc="n['deduction']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr t-if="n['foreign_withholding']"><td>Retenciones soportadas en el extranjero</td><td class="text-end" t-esc="-n['foreign_withholding']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr class="fw-bold"><td>IRPF estimado a pagar en España</td><td class="text-end" t-esc="-n['tax']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr class="fw-bold" style="font-size: 12px;"><td>Neto después de impuestos</td><td class="text-end" t-esc="n['net_result']" t-options="{'widget': 'monetary', 'display_currency': currency}"/></tr>
+                            <tr><td>Tipo efectivo · tipo marginal</td><td class="text-end"><t t-esc="'%.2f' % n['effective_rate']"/> % · <t t-esc="'%.0f' % n['marginal_rate']"/> %</td></tr>
+                        </tbody>
+                    </table>
+                    <p class="text-muted mb-3">
+                        Escala del ahorro: <t t-foreach="savings_scale" t-as="tramo"><t t-esc="'%.0f' % tramo[1]"/> %<t t-if="tramo[0] != float('inf')"> hasta <t t-esc="'{:,.0f}'.format(tramo[0]).replace(',', '.')"/> €</t><t t-else=""> en adelante</t><t t-if="not tramo_last"> · </t></t>.
+                        Es el impuesto que el trading añade a su declaración; no incluye otras rentas ni deducciones personales.
+                        Las pérdidas pendientes de años anteriores reducirían el impuesto.
+                    </p>
+
+                    <h5>3. Bienes y derechos en el extranjero (modelos 720 y 721)</h5>
+                    <table class="table table-sm table-bordered mb-1">
+                        <thead>
+                            <tr>
+                                <th>Cuenta</th>
+                                <th class="text-end">Saldo en efectivo</th>
+                                <th class="text-end">Valores y CFD</th>
+                                <th class="text-end">Criptoactivos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr t-foreach="foreign" t-as="f">
+                                <td t-esc="f['account'].name"/>
+                                <td class="text-end" t-esc="f['cash']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="f['securities']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                <td class="text-end" t-esc="f['crypto']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <p class="text-muted mb-3">
+                        Valores a <t t-esc="today"/>. Para los modelos cuenta el valor a 31 de diciembre (y, en cuentas, también
+                        el saldo medio del último trimestre); solo hay que presentarlos si alguno de los bloques supera
+                        50.000 € y, después, si aumenta más de 20.000 € respecto a la última declaración.
+                    </p>
+
+                    <t t-if="securities or crypto">
+                        <h5>4. Detalle de acciones, ETF y criptoactivos (FIFO)</h5>
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Instrumento</th>
+                                    <th>Clase</th>
+                                    <th>Fecha de adquisición</th>
+                                    <th>Fecha de transmisión</th>
+                                    <th class="text-end">Unidades</th>
+                                    <th class="text-end">Valor de adquisición</th>
+                                    <th class="text-end">Valor de transmisión</th>
+                                    <th class="text-end">Resultado</th>
+                                    <th class="text-end">Computable</th>
+                                    <th class="text-end">Según broker</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="securities + crypto" t-as="r">
+                                    <td>
+                                        <t t-esc="r['p'].instrument_id.symbol"/><t t-if="r['estimated']"> *</t><t t-if="r['two_months']"> †</t><t t-if="r['missing_units']"> ‡</t>
+                                        <div class="text-muted">Ref. <t t-esc="r['p'].broker_ref or '—'"/></div>
+                                    </td>
+                                    <td t-esc="'Cripto' if r['tax_class'] == 'crypto' else 'Acción / ETF'"/>
+                                    <td t-esc="', '.join(fmt_dt(d) for d in r['acquisition_dates']) or '—'"/>
+                                    <td t-esc="fmt_dt(r['p'].close_date)"/>
+                                    <td class="text-end" t-esc="'%.6f' % r['units']"/>
+                                    <td class="text-end" t-esc="r['acquisition']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                    <td class="text-end" t-esc="r['transmission']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                    <td class="text-end" t-esc="r['result']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                    <td class="text-end fw-bold" t-esc="r['computable']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                    <td class="text-end text-muted" t-esc="r['broker_result']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p class="text-muted">
+                            FIFO: se consideran vendidas primero las unidades compradas antes, aunque el broker cerrara otra
+                            posición; por eso el resultado puede diferir del que muestra el broker. † Pérdida diferida por la
+                            regla de los dos meses. ‡ Faltan compras registradas.
+                        </p>
+                    </t>
+
+                    <t t-if="cfd">
+                        <h5>5. Detalle de derivados / CFD</h5>
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Instrumento</th>
+                                    <th>Sentido</th>
+                                    <th>Ref. broker</th>
+                                    <th>Apertura</th>
+                                    <th>Cierre</th>
+                                    <th class="text-end">Precio apert.</th>
+                                    <th class="text-end">Precio cierre</th>
+                                    <th class="text-end">Importe</th>
+                                    <th class="text-end">Apal.</th>
+                                    <th class="text-end">Comisiones</th>
+                                    <th class="text-end">Resultado</th>
+                                    <th class="text-end">Resultado (<t t-esc="currency.name"/>)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="cfd" t-as="r">
+                                    <t t-set="p" t-value="r['p']"/>
+                                    <td><t t-esc="p.instrument_id.symbol"/><t t-if="r['estimated']"> *</t></td>
+                                    <td t-esc="'Largo' if p.side == 'buy' else 'Corto'"/>
+                                    <td t-esc="p.broker_ref or ''"/>
+                                    <td t-esc="fmt_dt(p.open_date)"/>
+                                    <td t-esc="fmt_dt(p.close_date)"/>
+                                    <td class="text-end" t-esc="'%.5f' % p.open_rate if p.open_rate &lt; 10 else '%.2f' % p.open_rate"/>
+                                    <td class="text-end" t-esc="'%.5f' % p.close_rate if p.close_rate &lt; 10 else '%.2f' % p.close_rate"/>
+                                    <td class="text-end" t-esc="p.amount" t-options="{'widget': 'monetary', 'display_currency': p.currency_id}"/>
+                                    <td class="text-end" t-esc="p.leverage"/>
+                                    <td class="text-end" t-esc="p.fees" t-options="{'widget': 'monetary', 'display_currency': p.currency_id}"/>
+                                    <td class="text-end" t-esc="p.realized_pnl" t-options="{'widget': 'monetary', 'display_currency': p.currency_id}"/>
+                                    <td class="text-end fw-bold" t-esc="r['result']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </t>
+
+                    <t t-if="dividends or interests">
+                        <h5>6. Detalle de dividendos e intereses</h5>
+                        <table class="table table-sm table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>Tipo</th>
+                                    <th>Descripción</th>
+                                    <th>ISIN</th>
+                                    <th>País</th>
+                                    <th class="text-end">Bruto</th>
+                                    <th class="text-end">Retención</th>
+                                    <th class="text-end">Neto</th>
+                                    <th class="text-end">Deducción (máx.)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr t-foreach="dividends" t-as="d">
+                                    <td t-esc="fmt_dt(d['i'].date)"/>
+                                    <td>Dividendo</td>
+                                    <td t-esc="d['i'].name"/>
+                                    <td t-esc="d['i'].isin or ''"/>
+                                    <td t-esc="d['i'].country_code or ''"/>
+                                    <td class="text-end" t-esc="d['gross']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                    <td class="text-end" t-esc="d['withholding']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                    <td class="text-end" t-esc="d['net']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                    <td class="text-end" t-esc="d['deduction']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                </tr>
+                                <tr t-foreach="interests" t-as="d">
+                                    <td t-esc="fmt_dt(d['i'].date)"/>
+                                    <td>Interés</td>
+                                    <td t-esc="d['i'].name"/>
+                                    <td/>
+                                    <td/>
+                                    <td class="text-end" t-esc="d['gross']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                    <td class="text-end" t-esc="d['withholding']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                    <td class="text-end" t-esc="d['gross'] - d['withholding']" t-options="{'widget': 'monetary', 'display_currency': currency}"/>
+                                    <td class="text-end">—</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </t>
+
+                    <p class="text-muted">
+                        * Cierre estimado. Documento orientativo generado desde Odoo; conserve el extracto oficial del broker
+                        como justificante.
+                    </p>
+                </div>
+            </t>
+        </t>
+    </template>
+</odoo>

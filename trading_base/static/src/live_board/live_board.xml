@@ -4,6 +4,7 @@
         <div class="o_trading_live_board o_action h-100 overflow-auto p-3">
             <div class="d-flex align-items-center gap-2 mb-3">
                 <h2 class="mb-0 me-auto">Panel en vivo</h2>
+                <span t-if="isStreaming" class="badge text-bg-success" title="Precios por WebSocket del broker">● En directo</span>
                 <span class="badge text-bg-light">
                     <t t-if="state.paused">En pausa</t>
                     <t t-elif="state.loading">Actualizando…</t>

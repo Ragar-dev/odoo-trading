@@ -6,6 +6,7 @@ from odoo.exceptions import UserError
 from odoo.tests import TransactionCase, tagged
 
 from odoo.addons.trading_base.models.instrument import tradingview_symbol_for
+from odoo.addons.trading_base.report.tax_report import after_tax, savings_tax
 from odoo.addons.trading_base.models.broker_adapter import ADAPTERS, BrokerAdapter, BrokerError, parse_datetime
 
 
@@ -384,3 +385,177 @@ class TestTrading(TransactionCase):
         again = Drawing.save_chart_prefs({'marker_size': 2})
         self.assertEqual((again['buy_color'], again['marker_size']), ('#ff9800', 2))
         self.assertEqual(self.instrument.get_chart_data('OneDay')['prefs'], again)
+
+    def _rate(self, day, rate):
+        self.env['res.currency.rate'].create({
+            'currency_id': self.usd.id, 'company_id': self.account.company_id.id, 'name': day, 'rate': rate})
+
+    def _eur(self, amount, day):
+        company = self.account.company_id
+        return self.usd._convert(amount, company.currency_id, company, fields.Date.to_date(day), round=False)
+
+    def _closed(self, **vals):
+        pos = self._position(**{k: v for k, v in vals.items() if k not in ('close_date', 'close_rate', 'realized_pnl')})
+        pos.write({'state': 'closed', 'close_date': vals['close_date'], 'close_rate': vals['close_rate'],
+                   'realized_pnl': vals.get('realized_pnl', 0.0)})
+        return pos
+
+    def test_tax_report(self):
+        self._rate('2026-01-01', 1.0)
+        self._rate('2026-03-01', 1.25)
+        # CFD (apalancado) y una acción cerrada con estimación.
+        cfd = self._closed(side='sell', leverage=5, open_date=datetime(2026, 2, 1), close_date=datetime(2026, 3, 2, 12),
+                           close_rate=95.0, realized_pnl=-10.0)
+        cfd.close_estimated = True
+        stock = self._closed(units=2.0, open_date=datetime(2026, 1, 5), close_date=datetime(2026, 3, 5, 12),
+                             close_rate=125.0, realized_pnl=50.0)
+        self._closed(open_date=datetime(2025, 1, 5), close_date=datetime(2025, 4, 1, 12), close_rate=150.0)  # otro año
+        self.env['trading.income'].create({
+            'account_id': self.account.id, 'kind': 'dividend', 'date': '2026-03-10', 'name': 'Dividendo AAPL',
+            'isin': 'US0378331005', 'gross': 10.0, 'withholding': 3.0})
+        self.env['trading.income'].create({
+            'account_id': self.account.id, 'kind': 'interest', 'date': '2026-03-10', 'name': 'Intereses',
+            'gross': 4.0})
+        wizard = self.env['trading.tax.report.wizard'].create({'year': 2026, 'account_ids': [(6, 0, self.account.ids)]})
+        self.assertEqual((wizard.position_count, wizard.estimated_count), (2, 1))
+        values = self.env['report.trading_base.report_tax_year']._get_report_values(
+            [], {'year': 2026, 'account_ids': self.account.ids})
+        # Acción: compra al cambio de enero y venta al de marzo (no el P/L del broker convertido).
+        [row] = values['securities']
+        self.assertAlmostEqual(row['acquisition'], self._eur(200.0, '2026-01-05'))
+        self.assertAlmostEqual(row['transmission'], self._eur(250.0, '2026-03-05'))
+        self.assertAlmostEqual(values['sec_block']['net'], self._eur(250.0, '2026-03-05') - self._eur(200.0, '2026-01-05'))
+        self.assertAlmostEqual(values['cfd_block']['net'], self._eur(-10.0, '2026-03-02'))
+        div = values['div_block']
+        self.assertAlmostEqual(div['gross'], self._eur(10.0, '2026-03-10'))
+        self.assertAlmostEqual(div['deduction'], self._eur(1.5, '2026-03-10'))  # tope del 15 %
+        self.assertAlmostEqual(values['int_block']['gross'], self._eur(4.0, '2026-03-10'))
+        self.assertTrue(any('estimado' in w for w in values['warnings']))
+        html, _fmt = self.env['ir.actions.report']._render_qweb_html(
+            'trading_base.report_tax_year', wizard.ids, data={'year': 2026, 'account_ids': self.account.ids})
+        html = html.decode()
+        for text in ('Ejercicio 2026', 'Acciones y ETF', 'Derivados / CFD', 'Dividendos', 'modelos 720 y 721'):
+            self.assertIn(text, html)
+        with patch('odoo.addons.trading_base.models.res_currency.requests.get') as get:
+            get.side_effect = Exception('sin red')
+            with self.assertRaises(UserError):
+                self.env['trading.tax.report.wizard'].create({'year': 1990}).action_print()
+
+    def test_fifo_and_two_months(self):
+        self._rate('2026-01-01', 1.0)
+        old = self._position(units=10.0, open_rate=100.0, open_date=datetime(2026, 1, 10))
+        new = self._closed(units=10.0, open_rate=120.0, open_date=datetime(2026, 2, 10),
+                           close_date=datetime(2026, 3, 1, 12), close_rate=110.0, realized_pnl=-100.0)
+        values = self.env['report.trading_base.report_tax_year']._tax_data(2026, self.account)
+        [row] = values['securities']
+        # FIFO: la venta consume las unidades compradas a 100 (las más antiguas), no las de 120.
+        self.assertAlmostEqual(row['acquisition'], 1000.0)
+        self.assertAlmostEqual(row['result'], 100.0)
+        self.assertFalse(row['two_months'])
+        self.assertTrue(old.state == 'open' and new.state == 'closed')
+
+        # Pérdida con recompra en los dos meses siguientes -> no computable.
+        loss = self._closed(units=5.0, open_rate=100.0, open_date=datetime(2026, 4, 1),
+                            close_date=datetime(2026, 9, 1, 12), close_rate=80.0, realized_pnl=-100.0)
+        self._position(units=5.0, open_rate=82.0, open_date=datetime(2026, 9, 20))
+        values = self.env['report.trading_base.report_tax_year']._tax_data(2026, self.account)
+        rows = {r['p'].id: r for r in values['securities']}
+        self.assertTrue(rows[loss.id]['two_months'])
+        self.assertEqual(rows[loss.id]['computable'], 0.0)
+        self.assertTrue(any('dos meses' in w for w in values['warnings']))
+
+    def test_ecb_history(self):
+        import io as _io
+        import zipfile as _zip
+        csv_text = 'Date,USD,JPY,\n2026-01-06,1.0400,160.1,\n2026-01-05,1.0380,160.0,\n2025-12-01,1.0500,N/A,\n'
+        buf = _io.BytesIO()
+        with _zip.ZipFile(buf, 'w') as z:
+            z.writestr('eurofxref-hist.csv', csv_text)
+        response = MagicMock(content=buf.getvalue())
+        company = self.account.company_id
+        self.env['res.currency.rate'].search([('currency_id', '=', self.usd.id), ('company_id', '=', company.id)]).unlink()
+        with patch('odoo.addons.trading_base.models.res_currency.requests.get', return_value=response) as get:
+            self.assertTrue(self.env['res.currency']._trading_ensure_ecb_history(fields.Date.to_date('2026-01-05')))
+            rates = self.env['res.currency.rate'].search([('currency_id', '=', self.usd.id), ('company_id', '=', company.id)])
+            self.assertEqual(sorted(rates.mapped('rate')), [1.038, 1.04])
+            # Con los tipos ya cargados no vuelve a descargar.
+            self.env['res.currency']._trading_ensure_ecb_history(fields.Date.to_date('2026-01-05'))
+            self.assertEqual(get.call_count, 1)
+
+    def test_after_tax(self):
+        self.assertAlmostEqual(savings_tax(6000), 1140.0)
+        self.assertAlmostEqual(savings_tax(10000), 1140.0 + 840.0)
+        self.assertAlmostEqual(savings_tax(400000), 1140 + 9240 + 34500 + 27000 + 30000)
+        # Ganancia de 1.000 € sin otras rentas: 19 %.
+        r = after_tax(1000.0, 0.0, 0.0, 0.0)
+        self.assertAlmostEqual(r['tax'], 190.0)
+        self.assertAlmostEqual(r['net_result'], 810.0)
+        # Con 5.500 € de otras rentas, 500 € van al 19 % y 500 € al 21 %.
+        r = after_tax(1000.0, 0.0, 0.0, 0.0, other_savings=5500.0)
+        self.assertAlmostEqual(r['tax'], 95.0 + 105.0)
+        self.assertEqual(r['marginal_rate'], 21.0)
+        # Dividendos de 100 € con 15 € de retención en EE. UU.: la deducción anula la cuota española (19 €).
+        r = after_tax(0.0, 100.0, 15.0, 15.0)
+        self.assertAlmostEqual((r['tax_gross'], r['deduction'], r['tax']), (19.0, 15.0, 4.0))
+        self.assertAlmostEqual(r['net_result'], 100.0 - 15.0 - 4.0)
+        # Pérdidas de 400 € con 1.000 € de dividendos: compensa 250 € (25 %) y quedan 150 € pendientes.
+        r = after_tax(-400.0, 1000.0, 0.0, 0.0)
+        self.assertAlmostEqual((r['compensation'], r['carry_forward'], r['base']), (250.0, 150.0, 750.0))
+        self.assertAlmostEqual(r['net_result'], 600.0 - 142.5)
+        # Solo pérdidas: no hay impuesto.
+        r = after_tax(-50.0, 0.0, 0.0, 0.0)
+        self.assertEqual(r['tax'], 0.0)
+        self.assertEqual(r['net_result'], -50.0)
+        wizard = self.env['trading.tax.report.wizard'].create({'year': 2026, 'account_ids': [(6, 0, self.account.ids)]})
+        self.assertEqual(wizard.net_result, 0.0)
+
+    def test_position_after_tax(self):
+        self._rate('2026-01-01', 1.0)
+        self.env['ir.config_parameter'].sudo().set_param('trading.other_savings', 0)
+        win = self._closed(side='sell', leverage=5, open_date=datetime(2026, 2, 1), close_date=datetime(2026, 3, 2, 12),
+                           close_rate=95.0, realized_pnl=300.0)
+        loss = self._closed(side='sell', leverage=5, open_date=datetime(2026, 2, 1), close_date=datetime(2026, 3, 3, 12),
+                            close_rate=105.0, realized_pnl=-100.0)
+        info = self.env['report.trading_base.report_tax_year']._tax_data(
+            2026, self.env['trading.broker.account'].with_context(active_test=False).search([]))['after_tax']
+        rate = info['tax'] / info['gross_result']
+        self.assertAlmostEqual(win.tax_estimate, win.realized_pnl_company * rate)
+        self.assertLess(loss.tax_estimate, 0)  # la pérdida ahorra impuesto
+        self.assertAlmostEqual(win.net_after_tax, win.realized_pnl_company - win.tax_estimate)
+        # Abierta con ganancia: tipo marginal del año en curso.
+        self.instrument.write({'bid': 120.0, 'ask': 120.0, 'last_price': 120.0})
+        open_pos = self._position(open_rate=100.0, units=1.0)
+        self.assertGreaterEqual(open_pos.tax_rate_applied, 19.0)
+        self.assertAlmostEqual(open_pos.net_after_tax, open_pos.tax_estimate * (100 / open_pos.tax_rate_applied - 1), delta=0.02)
+
+    def test_after_tax_group_sums(self):
+        self._rate('2026-01-01', 1.0)
+        self._closed(side='sell', leverage=5, open_date=datetime(2026, 2, 1), close_date=datetime(2026, 3, 2, 12),
+                     close_rate=95.0, realized_pnl=300.0)
+        self._closed(side='sell', leverage=5, open_date=datetime(2026, 2, 1), close_date=datetime(2026, 3, 3, 12),
+                     close_rate=105.0, realized_pnl=-100.0)
+        Position = self.env['trading.position']
+        self.assertEqual(Position.fields_get(['tax_estimate'], ['aggregator'])['tax_estimate']['aggregator'], 'sum')
+        groups = Position.formatted_read_group(
+            [], ['state'], ['__count', 'tax_estimate:sum', 'net_after_tax:sum', 'net_after_tax:sum_currency'])
+        for group in groups:
+            records = Position.search([('state', '=', group['state'])])
+            self.assertAlmostEqual(group['tax_estimate:sum'], sum(records.mapped('tax_estimate')))
+            self.assertAlmostEqual(group['net_after_tax:sum'], sum(records.mapped('net_after_tax')))
+            self.assertAlmostEqual(group['net_after_tax:sum_currency'], group['net_after_tax:sum'])
+
+    def test_refresh_from_broker_action(self):
+        action = self.env['trading.position'].action_refresh_from_broker()
+        self.assertEqual(action['tag'], 'display_notification')
+        self.assertEqual(action['params']['next']['tag'], 'soft_reload')
+
+    def test_open_loss_saving_capped(self):
+        self.env['ir.config_parameter'].sudo().set_param('trading.other_savings', 0)
+        self.instrument.write({'bid': 50.0, 'ask': 50.0, 'last_price': 50.0})
+        pos = self._position(open_rate=100.0, units=1.0)  # pierde 50
+        base = self.env['report.trading_base.report_tax_year']._tax_data(
+            fields.Date.context_today(pos).year,
+            self.env['trading.broker.account'].with_context(active_test=False).search([]))['after_tax']['base']
+        self.assertAlmostEqual(pos.tax_estimate, -min(pos.unrealized_pnl and 50.0 or 0.0, base) * 0.19
+                               if base < 6000 else pos.tax_estimate, delta=0.02)
+        self.assertLessEqual(abs(pos.tax_estimate), 50.0 * 0.30)

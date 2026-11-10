@@ -1,6 +1,7 @@
 from datetime import timezone
 
 from odoo import api, fields, models
+from odoo.fields import Domain
 from odoo.exceptions import UserError
 
 from .broker_adapter import BrokerError
@@ -41,6 +42,9 @@ class TradingPosition(models.Model):
     state = fields.Selection([('open', 'Abierta'), ('closed', 'Cerrada')], default='open', required=True, tracking=True)
     close_date = fields.Datetime(tracking=True)
     close_rate = fields.Float('Precio de cierre', digits=(16, 6), tracking=True)
+    broker_confirmed = fields.Boolean(
+        'Confirmado con extracto', readonly=True, copy=False, tracking=True,
+        help='Cierre, resultado y comisiones tomados del extracto oficial del broker.')
     close_estimated = fields.Boolean(
         'Cierre estimado', help='El broker ya no devuelve la posición; el cierre se estimó con el último precio.')
     realized_pnl = fields.Monetary('P/L realizado', currency_field='currency_id', tracking=True)
@@ -59,6 +63,14 @@ class TradingPosition(models.Model):
         'P/L realizado (moneda compañía)', currency_field='company_currency_id',
         compute='_compute_realized_pnl_company', store=True)
     fiscal_year = fields.Integer('Ejercicio', compute='_compute_fiscal_year', store=True)
+    tax_estimate = fields.Monetary(
+        'IRPF estimado', currency_field='company_currency_id', compute='_compute_after_tax',
+        help='Cerradas: resultado × tipo efectivo del IRPF del ahorro de su ejercicio (una pérdida da impuesto '
+             'negativo: lo que ahorra). Abiertas: P/L no realizado × tipo marginal del año en curso. Estimación.')
+    tax_rate_applied = fields.Float('% IRPF aplicado', digits=(16, 2), compute='_compute_after_tax')
+    net_after_tax = fields.Monetary(
+        'Neto después de impuestos', currency_field='company_currency_id', compute='_compute_after_tax',
+        help='Resultado en la moneda de la compañía menos el IRPF estimado.')
     move_id = fields.Many2one('account.move', 'Asiento', readonly=True, copy=False, check_company=True)
 
     def _chart_dict(self, focus=False):
@@ -137,6 +149,90 @@ class TradingPosition(models.Model):
             date = (p.close_date or fields.Datetime.now()).date()
             p.realized_pnl_company = p.currency_id._convert(
                 p.realized_pnl, p.company_id.currency_id, p.company_id, date)
+
+    @api.depends('state', 'realized_pnl_company', 'unrealized_pnl', 'fiscal_year')
+    def _compute_after_tax(self):
+        Report = self.env['report.trading_base.report_tax_year']
+        Account = self.env['trading.broker.account'].with_context(active_test=False)
+        other = float(self.env['ir.config_parameter'].sudo().get_param('trading.other_savings') or 0.0)
+        today = fields.Date.context_today(self)
+        years = {}
+
+        def year_info(year):
+            if year not in years:
+                years[year] = Report._tax_data(year, Account.search([]), other_savings=other)['after_tax']
+            return years[year]
+
+        for p in self:
+            if not p.company_id:
+                p.tax_estimate = p.tax_rate_applied = p.net_after_tax = 0.0
+                continue
+            if p.state == 'closed':
+                amount = p.realized_pnl_company
+                info = year_info(p.fiscal_year) if p.fiscal_year else None
+                rate = info['tax'] / info['gross_result'] if info and info['gross_result'] > 0 else 0.0
+            else:
+                amount = p.currency_id._convert(p.unrealized_pnl, p.company_currency_id, p.company_id, today,
+                                                round=False) if p.currency_id else 0.0
+                info = year_info(today.year)
+                rate = info['marginal_rate'] / 100.0
+                if amount < 0:
+                    # Una pérdida abierta solo ahorra impuesto hasta la base del ahorro que haya este año.
+                    taxable = -min(-amount, max(info['base'], 0.0))
+                    p.tax_rate_applied = 100.0 * rate * taxable / amount if amount else 0.0
+                    p.tax_estimate = taxable * rate
+                    p.net_after_tax = amount - p.tax_estimate
+                    continue
+            p.tax_rate_applied = rate * 100.0
+            p.tax_estimate = amount * rate
+            p.net_after_tax = amount - amount * rate
+
+    def action_refresh_from_broker(self):
+        """Sincroniza ya las carteras de los brokers y refresca los precios de las posiciones abiertas."""
+        Account = self.env['trading.broker.account']
+        accounts = self.account_id or Account.search([])
+        accounts = accounts.filtered(lambda a: a.broker_type != 'manual')
+        errors = []
+        for acc in accounts:
+            try:
+                with self.env.cr.savepoint():
+                    acc._sync_portfolio()
+            except BrokerError as e:
+                acc.write({'state': 'error', 'last_error': str(e)})
+                errors.append(f'{acc.name}: {e}')
+        open_positions = self.search([('state', '=', 'open'), ('account_id', 'in', accounts.ids)])
+        try:
+            open_positions.instrument_id._refresh_prices(raise_errors=True)
+        except BrokerError as e:
+            errors.append(str(e))
+        if errors:
+            return Account._notify('\n'.join(errors), 'danger')
+        return Account._notify(self.env._('Posiciones y precios actualizados (%s cuentas).', len(accounts)))
+
+    # Campos calculados sin almacenar que la lista suma al agrupar (el ORM no puede agregarlos en SQL).
+    _PY_SUM_FIELDS = ('tax_estimate', 'net_after_tax')
+
+    @api.model
+    def fields_get(self, allfields=None, attributes=None):
+        res = super().fields_get(allfields, attributes)
+        if attributes is None or 'aggregator' in attributes:
+            for name in self._PY_SUM_FIELDS:
+                if name in res:
+                    res[name]['aggregator'] = 'sum'
+        return res
+
+    @api.model
+    def formatted_read_group(self, domain, groupby=(), aggregates=(), having=(), offset=0, limit=None, order=None):
+        py_specs = [a for a in aggregates if a.split(':')[0] in self._PY_SUM_FIELDS]
+        if not py_specs:
+            return super().formatted_read_group(domain, groupby, aggregates, having, offset, limit, order)
+        sql_specs = [a for a in aggregates if a not in py_specs]
+        groups = super().formatted_read_group(domain, groupby, sql_specs, having, offset, limit, order)
+        for group in groups:
+            records = self.search(Domain.AND([domain or [], group.get('__extra_domain') or []]))
+            for spec in py_specs:
+                group[spec] = sum(records.mapped(spec.split(':')[0]))
+        return groups
 
     @api.depends('close_date')
     def _compute_fiscal_year(self):

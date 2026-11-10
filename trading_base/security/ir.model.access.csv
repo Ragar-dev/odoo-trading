@@ -13,3 +13,6 @@ access_trading_order_user,trading.order.user,model_trading_order,group_trading_u
 access_trading_order_manager,trading.order.manager,model_trading_order,group_trading_manager,1,1,1,1
 access_trading_import_wizard_user,trading.instrument.import.wizard.user,model_trading_instrument_import_wizard,group_trading_user,1,1,1,1
 access_trading_chart_drawing_user,trading.chart.drawing.user,model_trading_chart_drawing,group_trading_user,1,1,1,1
+access_trading_tax_report_wizard_user,trading.tax.report.wizard.user,model_trading_tax_report_wizard,group_trading_user,1,1,1,1
+access_trading_income_user,trading.income.user,model_trading_income,group_trading_user,1,1,1,0
+access_trading_income_manager,trading.income.manager,model_trading_income,group_trading_manager,1,1,1,1

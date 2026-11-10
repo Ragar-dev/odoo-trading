@@ -128,26 +128,53 @@ class TradingInstrument(models.Model):
                 continue
             for inst in instruments:
                 rate = rates.get(inst.broker_ref)
-                if not rate:
-                    continue
-                bid = rate.get('bid') or 0.0
-                ask = rate.get('ask') or 0.0
-                last = rate.get('last') or ((bid + ask) / 2 if bid and ask else bid or ask)
-                vals = {
-                    'bid': bid, 'ask': ask, 'last_price': last,
-                    'quote_type': rate.get('quote_type') or False,
-                    'price_date': parse_datetime(rate.get('date')) or now,
-                    'price_checked_at': now,
-                    'tick_direction': inst._tick(inst.last_price, last),
-                }
-                if inst.prev_close_date != today:
-                    prev = inst._fetch_prev_close(adapter)
-                    if prev:
-                        vals.update(prev_close=prev, prev_close_date=today)
-                prev_close = vals.get('prev_close', inst.prev_close)
-                vals['change_pct'] = (last - prev_close) / prev_close * 100 if prev_close else 0.0
-                inst.write(vals)
+                if rate:
+                    inst._apply_rate(rate, adapter, now, today)
         return True
+
+    def _apply_rate(self, rate, adapter, now, today):
+        """Guarda un precio del broker (REST o WebSocket) en el instrumento."""
+        self.ensure_one()
+        bid = rate.get('bid') or 0.0
+        ask = rate.get('ask') or 0.0
+        last = rate.get('last') or ((bid + ask) / 2 if bid and ask else bid or ask)
+        vals = {
+            'bid': bid, 'ask': ask, 'last_price': last,
+            'price_date': parse_datetime(rate.get('date')) or now,
+            'price_checked_at': now,
+            'tick_direction': self._tick(self.last_price, last),
+        }
+        if 'quote_type' in rate:
+            vals['quote_type'] = rate.get('quote_type') or False
+        if self.prev_close_date != today and adapter:
+            prev = self._fetch_prev_close(adapter)
+            if prev:
+                vals.update(prev_close=prev, prev_close_date=today)
+        prev_close = vals.get('prev_close', self.prev_close)
+        vals['change_pct'] = (last - prev_close) / prev_close * 100 if prev_close else 0.0
+        self.write(vals)
+
+    def _apply_stream_rates(self, rates, adapter=None):
+        """Precios recibidos en directo ({broker_ref: rate}). Avisa a los navegadores abiertos."""
+        now = fields.Datetime.now()
+        today = fields.Date.context_today(self)
+        changed = self.browse()
+        for inst in self:
+            rate = rates.get(inst.broker_ref)
+            if rate and (rate.get('bid') or rate.get('ask')):
+                inst._apply_rate(rate, adapter, now, today)
+                changed |= inst
+        if changed:
+            self._notify_live('trading_prices', {'instruments': [
+                {'id': i.id, 'last_price': i.last_price, 'bid': i.bid, 'ask': i.ask} for i in changed]})
+        return changed
+
+    @api.model
+    def _notify_live(self, kind, payload):
+        """Mensaje por el bus de Odoo a todos los usuarios de Trading (llega al hacer commit)."""
+        group = self.env.ref('trading_base.group_trading_user', raise_if_not_found=False)
+        if group:
+            self.env['bus.bus']._sendone(group, kind, payload)
 
     @staticmethod
     def _tick(old, new):
@@ -293,7 +320,7 @@ class TradingInstrument(models.Model):
                 'id': a.id, 'name': a.name, 'environment': a.environment, 'state': a.state,
                 'currency': a.currency_id.name, 'credit': a.credit,
                 'unrealized_pnl': sum(a.position_ids.filtered(lambda p: p.state == 'open').mapped('unrealized_pnl')),
-                'equity': a.equity, 'last_error': a.last_error or '',
+                'equity': a.equity, 'last_error': a.last_error or '', 'stream_live': a.stream_live,
             } for a in accounts],
             'instruments': [{
                 'id': i.id, 'symbol': i.symbol, 'name': i.name or '', 'account': i.account_id.name,
@@ -313,4 +340,7 @@ class TradingInstrument(models.Model):
     def _cron_refresh_prices(self):
         ids = self.search([('watchlist', '=', True)]) | self.env['trading.position'].search(
             [('state', '=', 'open')]).instrument_id
-        ids.filtered(lambda i: i.account_id.broker_type != 'manual')._refresh_prices()
+        # Los que ya llegan en directo por WebSocket están frescos y no se piden por REST.
+        fresh_limit = fields.Datetime.now() - timedelta(seconds=50)
+        ids.filtered(lambda i: i.account_id.broker_type != 'manual'
+                     and (not i.price_checked_at or i.price_checked_at < fresh_limit))._refresh_prices()

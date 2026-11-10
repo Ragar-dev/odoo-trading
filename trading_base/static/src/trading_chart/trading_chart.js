@@ -5,6 +5,7 @@ import { registry } from "@web/core/registry";
 import { loadJS } from "@web/core/assets";
 import { cookie } from "@web/core/browser/cookie";
 import { useService } from "@web/core/utils/hooks";
+import { useTradingLive } from "../live/trading_live_service";
 import { ConfirmationDialog } from "@web/core/confirmation_dialog/confirmation_dialog";
 
 const LIB_URL = "/trading_base/static/lib/lightweight-charts/lightweight-charts.standalone.production.js";
@@ -195,6 +196,14 @@ export class TradingChart extends Component {
             this.load();
             this.liveTimer = setInterval(() => this.refreshLastPrice(), 30000);
         });
+        // Precio en directo del instrumento (WebSocket del broker → bus de Odoo).
+        useTradingLive((kind, payload) => {
+            const inst = kind === "prices" && payload.instruments?.find((i) => i.id === this.instrumentId);
+            if (inst && inst.last_price && inst.last_price !== this.lastPrice && this.series && !this.state.loading) {
+                this.lastPrice = inst.last_price;
+                this.applyLastPrice(inst.last_price);
+            }
+        }, 500);
         onWillUpdateProps((next) => {
             if (this.idsOf(next).instrumentId !== this.idsOf(this.props).instrumentId) {
                 this.nextProps = next;

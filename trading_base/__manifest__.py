@@ -16,12 +16,16 @@
         'views/price_views.xml',
         'views/position_views.xml',
         'views/mirror_views.xml',
+        'views/income_views.xml',
         'views/order_views.xml',
         'wizards/instrument_import_wizard_views.xml',
+        'wizards/tax_report_wizard_views.xml',
+        'report/tax_report.xml',
         'views/menus.xml',
     ],
     'assets': {
         'web.assets_backend': [
+            'trading_base/static/src/live/*',
             'trading_base/static/src/live_board/*',
             'trading_base/static/src/tradingview_chart/*',
             'trading_base/static/src/trading_chart/*',

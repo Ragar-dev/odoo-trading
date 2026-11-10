@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
@@ -153,6 +154,33 @@ class TradingBrokerAccount(models.Model):
             return self._set_error(e)
         self.write({'state': 'ok', 'last_error': False})
         return self._notify(message or self.env._('Conexión correcta.'))
+
+    stream_state = fields.Selection(
+        [('off', 'Sin conexión'), ('live', 'En directo'), ('error', 'Error')], 'Directo', default='off',
+        readonly=True, copy=False)
+    stream_seen_at = fields.Datetime('Último latido del directo', readonly=True, copy=False)
+    stream_message = fields.Char('Estado del directo', readonly=True, copy=False)
+    stream_live = fields.Boolean('En directo', compute='_compute_stream_live')
+
+    def _compute_stream_live(self):
+        limit = fields.Datetime.now() - timedelta(seconds=90)
+        for acc in self:
+            acc.stream_live = acc.stream_state == 'live' and bool(acc.stream_seen_at) and acc.stream_seen_at >= limit
+
+    def _stream_status(self, state, message=''):
+        self.write({'stream_state': state, 'stream_seen_at': fields.Datetime.now(), 'stream_message': message or False})
+
+    def _stream_portfolio_changed(self):
+        """El broker avisa en directo de una orden, apertura o cierre: se sincroniza y se avisa al navegador."""
+        for acc in self:
+            try:
+                with self.env.cr.savepoint():
+                    summary = acc._sync_portfolio()
+            except BrokerError as e:
+                acc.write({'state': 'error', 'last_error': str(e)})
+                _logger.warning('Trading: error sincronizando %s en directo: %s', acc.name, e)
+                continue
+            self.env['trading.instrument']._notify_live('trading_positions', {'account_id': acc.id, 'summary': summary or ''})
 
     def action_sync_portfolio(self):
         self.ensure_one()

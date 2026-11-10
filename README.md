@@ -38,8 +38,16 @@ resultados fiscales para el IRPF con la localización española (PGC PYMES).
 - Asiento PGC opcional de cada posición cerrada (766 / 666 contra 572).
 - Tipos de cambio diarios del BCE.
 
+**En directo** (opcional, servicio `odoo etoro_stream`)
+- Conexión permanente con el WebSocket de eToro: precios de las posiciones abiertas y del
+  seguimiento, y avisos de órdenes, aperturas y cierres de la cuenta.
+- Los precios se guardan cada segundo; ante un aviso de cartera, se sincroniza al momento.
+- La lista y la ficha de posiciones, el panel en vivo y la gráfica se actualizan solos por el bus
+  de Odoo, sin recargar la página.
+- Botón «Actualizar ahora» en posiciones para forzar la sincronización y los precios.
+
 **Tareas programadas**
-- Precios: cada minuto.
+- Precios: cada minuto (salta los que ya llegan en directo).
 - Sincronización de carteras: cada 15 minutos.
 - Tipos del BCE: diaria.
 
@@ -47,7 +55,7 @@ resultados fiscales para el IRPF con la localización española (PGC PYMES).
 
 - Odoo 19.0 Community.
 - Módulos de Odoo: `mail`, `account` y `l10n_es`.
-- Python: `requests`.
+- Python: `requests` y `openpyxl`; para el directo, `websocket-client` (`python3-websocket`).
 
 ## Instalación
 
@@ -73,6 +81,39 @@ ni asientos.
 Las claves se guardan solo en la base de datos, visibles únicamente para el grupo *Gestor* de
 Trading. Nunca van en el código ni en la configuración.
 
+## Precios en directo
+
+El directo es un proceso aparte del servidor web: `odoo etoro_stream` (comando que trae
+`trading_etoro`). Lee las claves de la base de datos, abre una conexión por cuenta de eToro con
+«Precios en directo» marcado y se reconecta solo. Su estado aparece en la ficha de la cuenta.
+
+Con Docker, una imagen de Odoo con `python3-websocket`:
+
+```dockerfile
+FROM odoo:19.0
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends python3-websocket \
+    && rm -rf /var/lib/apt/lists/*
+USER odoo
+```
+
+y un servicio más en `docker-compose.yml`, con los mismos volúmenes y variables que `odoo`:
+
+```yaml
+  stream:
+    build: {context: ., dockerfile: Dockerfile.stream}
+    command: ["odoo", "etoro_stream"]
+    depends_on: [db, odoo]
+    environment: {HOST: db, USER: odoo, PASSWORD: odoo}
+    volumes:
+      - ./addons:/mnt/extra-addons
+      - ./config:/etc/odoo
+      - odoo-data:/var/lib/odoo
+    restart: unless-stopped
+```
+
+Al actualizar los módulos, pare también `stream` y arránquelo después.
+
 ## Tests
 
 ```bash
@@ -81,8 +122,8 @@ odoo -d trading_test -i trading_etoro --test-tags /trading_base,/trading_etoro -
 
 ## Limitaciones
 
-- eToro: la ruta de cierre en demo es un supuesto no verificado. No hay WebSocket; los precios se
-  consultan por REST.
+- eToro: la ruta de cierre en demo es un supuesto no verificado. Sin el servicio del directo, los
+  precios se consultan por REST cada minuto.
 - Las posiciones que desaparecen de la cartera del broker se cierran con un precio **estimado**
   (marcado como «Cierre estimado»), porque la API solo devuelve las posiciones abiertas.
 - La clase fiscal es orientativa. Revise siempre el informe con su asesor antes de presentar la

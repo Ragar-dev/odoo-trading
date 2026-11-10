@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_trading_tax_report_wizard_form" model="ir.ui.view">
+        <field name="name">trading.tax.report.wizard.form</field>
+        <field name="model">trading.tax.report.wizard</field>
+        <field name="arch" type="xml">
+            <form string="Informe para la renta (PDF)">
+                <div class="alert alert-warning" role="alert" invisible="not estimated_count">
+                    <field name="estimated_count" class="oe_inline"/> posiciones tienen el cierre estimado.
+                    Importe el extracto de eToro antes de imprimir para usar los cierres reales.
+                </div>
+                <p class="text-muted">
+                    Reúne todo lo de trading para la declaración: acciones, ETF y cripto con FIFO y cambio del BCE de
+                    cada fecha, CFD, dividendos con su retención, intereses y la comprobación de bienes en el
+                    extranjero. Si faltan tipos de cambio históricos, se descargan del BCE al imprimir.
+                </p>
+                <group>
+                    <field name="year" options="{'format': false}"/>
+                    <field name="account_ids" widget="many2many_tags" options="{'no_create': True}"/>
+                    <field name="position_count" string="Posiciones cerradas"/>
+                    <field name="other_savings"/>
+                    <field name="company_currency_id" invisible="1"/>
+                </group>
+                <group string="Resultado neto (estimación)">
+                    <field name="gross_result"/>
+                    <field name="foreign_withholding" invisible="not foreign_withholding"/>
+                    <field name="tax_estimate"/>
+                    <field name="net_result" class="fw-bold"/>
+                    <field name="effective_rate" string="Tipo efectivo (%)"/>
+                    <field name="marginal_rate" string="Tipo marginal (%)"/>
+                </group>
+                <footer>
+                    <button name="action_print" type="object" string="Imprimir PDF" class="btn-primary"/>
+                    <button string="Cancelar" special="cancel" class="btn-secondary"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_trading_tax_report_wizard" model="ir.actions.act_window">
+        <field name="name">Informe para la renta (PDF)</field>
+        <field name="res_model">trading.tax.report.wizard</field>
+        <field name="view_mode">form</field>
+        <field name="target">new</field>
+    </record>
+</odoo>
