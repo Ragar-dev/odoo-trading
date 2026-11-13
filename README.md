@@ -38,6 +38,14 @@ resultados fiscales para el IRPF con la localización española (PGC PYMES).
 - Asiento PGC opcional de cada posición cerrada (766 / 666 contra 572).
 - Tipos de cambio diarios del BCE.
 
+**Web interna** (`/trading`, menú Trading › Web de trading)
+- Página propia, de estilo oscuro, solo para usuarios con sesión del grupo Trading (y `noindex`).
+- Resumen con patrimonio, resultado del día, tarjetas de cuenta, reparto, últimos movimientos y
+  gráfica de evolución del resultado (1 semana, 1 mes, 3 meses, 1 año).
+- Posiciones abiertas con filtro, búsqueda y orden; operaciones cerradas por ejercicio; carteras
+  copiadas; seguimiento de mercado; y renta del año con el neto después de impuestos.
+- Se actualiza sola cada 2 segundos; cada fila abre su ficha en Odoo.
+
 **En directo** (opcional, servicio `odoo etoro_stream`)
 - Conexión permanente con el WebSocket de eToro: precios de las posiciones abiertas y del
   seguimiento, y avisos de órdenes, aperturas y cierres de la cuenta.
@@ -114,11 +122,27 @@ y un servicio más en `docker-compose.yml`, con los mismos volúmenes y variable
 
 Al actualizar los módulos, pare también `stream` y arránquelo después.
 
+## Seguridad y privacidad
+
+- **Usuario** de Trading: consulta cuentas, cartera, precios y renta, y prepara órdenes.
+  **Gestor**: además envía órdenes y cierres, sincroniza la cartera, prueba la conexión, ve las
+  claves, importa extractos y edita dividendos. Se comprueba en el servidor, no solo en la vista.
+- Las cuentas reales exigen además «Permitir órdenes reales».
+- El módulo apaga las tareas de Odoo que envían datos fuera: «Publisher: Update Notification»
+  (odoo.com), «Base VAT: Sync updates from IAP VIES» y «Digest Emails».
+- La web `/trading` no carga nada de terceros (fuente del sistema) y no envía Referer fuera;
+  la pestaña de TradingView tampoco.
+- Los avisos en directo solo llegan a usuarios de Trading de la compañía de los datos.
+
 ## Tests
 
 ```bash
-odoo -d trading_test -i trading_etoro --test-tags /trading_base,/trading_etoro --stop-after-init
+odoo -d trading_test --db-filter='^trading_test$' -i trading_etoro \
+     --test-tags /trading_base,/trading_etoro --stop-after-init
 ```
+
+`--db-filter` hace falta si la configuración filtra otra base: los tests HTTP de la web interna
+inician sesión en la base de pruebas.
 
 ## Limitaciones
 

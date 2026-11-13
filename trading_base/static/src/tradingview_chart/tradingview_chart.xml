@@ -10,7 +10,8 @@
                     </a>
                 </div>
                 <iframe t-att-src="src" t-key="symbol" class="o_tradingview_frame w-100 border rounded"
-                        allowtransparency="true" allowfullscreen="true" loading="lazy"/>
+                        allowtransparency="true" allowfullscreen="true" loading="lazy"
+                        referrerpolicy="no-referrer"/>
             </t>
         </div>
     </t>

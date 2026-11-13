@@ -10,6 +10,13 @@
               groups="trading_base.group_trading_user"/>
     <menuitem id="menu_trading_live" name="Panel en vivo" parent="menu_trading_root"
               action="action_trading_live_board" sequence="1"/>
+    <record id="action_trading_web" model="ir.actions.act_url">
+        <field name="name">Web de trading</field>
+        <field name="url">/trading</field>
+        <field name="target">new</field>
+    </record>
+    <menuitem id="menu_trading_web" name="Web de trading" parent="menu_trading_root"
+              action="action_trading_web" sequence="2"/>
     <menuitem id="menu_trading_operations" name="Operaciones" parent="menu_trading_root" sequence="10"/>
     <menuitem id="menu_trading_positions" name="Posiciones" parent="menu_trading_operations"
               action="action_trading_position" sequence="1"/>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Página de la web interna de trading (/trading): solo usuarios con sesión del grupo Trading. -->
+    <template id="dashboard_page" name="Web de trading">&lt;!DOCTYPE html&gt;
+        <html lang="es">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1"/>
+                <meta name="robots" content="noindex, nofollow"/>
+                <meta name="color-scheme" content="dark"/>
+                <title>Trading · Resumen</title>
+                <link rel="icon" href="/trading_base/static/description/icon.png"/>
+                <meta name="referrer" content="same-origin"/>
+                <t t-call-assets="trading_base.assets_dashboard" t-js="false"/>
+            </head>
+            <body class="td-body">
+                <div id="td-app" t-att-data-user="user_name" t-att-data-currency="company_currency">
+                    <div class="td-boot">Cargando…</div>
+                </div>
+                <t t-call-assets="trading_base.assets_dashboard" t-css="false"/>
+            </body>
+        </html>
+    </template>
+</odoo>

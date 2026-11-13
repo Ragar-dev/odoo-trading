@@ -2,7 +2,7 @@ import logging
 from datetime import timedelta
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import AccessError, UserError
 
 from .broker_adapter import ADAPTERS, BrokerError, parse_datetime
 
@@ -119,7 +119,15 @@ class TradingBrokerAccount(models.Model):
             raise UserError(self.env._('No hay adaptador para el broker «%s».', self.broker_type))
         return cls(self)
 
+    def _check_manager(self):
+        """Operaciones con el broker que usan las claves (órdenes, cierres, sincronizar, probar):
+        solo Gestores. El superusuario (crons, servicio en directo) pasa."""
+        if self.env.su or self.env.user.has_group('trading_base.group_trading_manager'):
+            return True
+        raise AccessError(self.env._('Solo un Gestor de Trading puede operar con el broker.'))
+
     def _check_can_trade(self):
+        self._check_manager()
         for acc in self:
             if acc.environment == 'real' and not acc.sudo().allow_real_orders:
                 raise UserError(self.env._(
@@ -148,6 +156,7 @@ class TradingBrokerAccount(models.Model):
     # ------------------------------------------------------------------
     def action_test_connection(self):
         self.ensure_one()
+        self._check_manager()
         try:
             message = self._get_adapter().test_connection()
         except BrokerError as e:
@@ -167,6 +176,15 @@ class TradingBrokerAccount(models.Model):
         for acc in self:
             acc.stream_live = acc.stream_state == 'live' and bool(acc.stream_seen_at) and acc.stream_seen_at >= limit
 
+    @api.model
+    def _disable_phone_home(self):
+        """Privacidad: apaga las tareas de Odoo que envían datos fuera (odoo.com, IAP, correos de resumen)."""
+        for xmlid in ('mail.ir_cron_module_update_notification', 'base_vat.vies_iap_check_update',
+                      'digest.ir_cron_digest_scheduler_action'):
+            cron = self.env.ref(xmlid, raise_if_not_found=False)
+            if cron and cron.active:
+                cron.sudo().active = False
+
     def _stream_status(self, state, message=''):
         self.write({'stream_state': state, 'stream_seen_at': fields.Datetime.now(), 'stream_message': message or False})
 
@@ -180,10 +198,12 @@ class TradingBrokerAccount(models.Model):
                 acc.write({'state': 'error', 'last_error': str(e)})
                 _logger.warning('Trading: error sincronizando %s en directo: %s', acc.name, e)
                 continue
-            self.env['trading.instrument']._notify_live('trading_positions', {'account_id': acc.id, 'summary': summary or ''})
+            self.env['trading.instrument']._notify_live(
+                'trading_positions', {'account_id': acc.id, 'summary': summary or ''}, company=acc.company_id)
 
     def action_sync_portfolio(self):
         self.ensure_one()
+        self._check_manager()
         try:
             summary = self._sync_portfolio()
         except BrokerError as e:
@@ -192,6 +212,7 @@ class TradingBrokerAccount(models.Model):
 
     def action_refresh_prices(self):
         self.ensure_one()
+        self._check_manager()
         try:
             self.instrument_ids._refresh_prices(raise_errors=True)
         except BrokerError as e:

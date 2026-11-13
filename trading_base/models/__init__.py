@@ -9,3 +9,4 @@ from . import order
 from . import res_currency
 from . import res_users
 from . import income
+from . import dashboard

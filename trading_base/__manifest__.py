@@ -21,9 +21,15 @@
         'wizards/instrument_import_wizard_views.xml',
         'wizards/tax_report_wizard_views.xml',
         'report/tax_report.xml',
+        'views/dashboard_templates.xml',
         'views/menus.xml',
     ],
     'assets': {
+        'trading_base.assets_dashboard': [
+            'trading_base/static/lib/lightweight-charts/lightweight-charts.standalone.production.js',
+            'trading_base/static/dashboard/dashboard.css',
+            'trading_base/static/dashboard/dashboard.js',
+        ],
         'web.assets_backend': [
             'trading_base/static/src/live/*',
             'trading_base/static/src/live_board/*',

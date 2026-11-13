@@ -43,4 +43,6 @@
             <field name="interval_type">days</field>
         </record>
     </data>
+    <!-- Privacidad: apagar las tareas de Odoo que envían datos fuera (se repite en cada actualización). -->
+    <function model="trading.broker.account" name="_disable_phone_home"/>
 </odoo>

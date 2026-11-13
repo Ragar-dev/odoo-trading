@@ -165,16 +165,22 @@ class TradingInstrument(models.Model):
                 inst._apply_rate(rate, adapter, now, today)
                 changed |= inst
         if changed:
-            self._notify_live('trading_prices', {'instruments': [
+            changed._notify_live('trading_prices', {'instruments': [
                 {'id': i.id, 'last_price': i.last_price, 'bid': i.bid, 'ask': i.ask} for i in changed]})
         return changed
 
     @api.model
-    def _notify_live(self, kind, payload):
-        """Mensaje por el bus de Odoo a todos los usuarios de Trading (llega al hacer commit)."""
+    def _notify_live(self, kind, payload, company=None):
+        """Mensaje por el bus de Odoo (llega al hacer commit) a cada usuario de Trading con acceso a la
+        compañía de los datos. No se usa el canal del grupo: mezclaría compañías."""
         group = self.env.ref('trading_base.group_trading_user', raise_if_not_found=False)
-        if group:
-            self.env['bus.bus']._sendone(group, kind, payload)
+        if not group:
+            return
+        company = company or self[:1].company_id or self.env.company
+        users = group.sudo().all_user_ids.filtered(lambda u: company in u.company_ids)
+        Bus = self.env['bus.bus'].sudo()
+        for user in users:
+            Bus._sendone(user.partner_id, kind, payload)
 
     @staticmethod
     def _tick(old, new):

@@ -549,6 +549,117 @@ class TestTrading(TransactionCase):
         self.assertEqual(action['tag'], 'display_notification')
         self.assertEqual(action['params']['next']['tag'], 'soft_reload')
 
+    def test_dashboard_data(self):
+        import json
+        from datetime import timedelta
+        self._rate('2020-01-01', 1.0)
+        self.instrument.write({'bid': 110.0, 'ask': 110.0, 'last_price': 110.0, 'prev_close': 105.0,
+                               'prev_close_date': fields.Date.today()})
+        now = fields.Datetime.now()
+        pos = self._position(open_date=now - timedelta(days=10))  # 2 uds a 100 → +20 abierto
+        closed = self._closed(open_date=now - timedelta(days=9), close_date=now - timedelta(days=3),
+                              close_rate=103.0, realized_pnl=6.0)
+        for back, close in ((12, 99.0), (6, 104.0), (2, 108.0)):
+            self.env['trading.price'].create({'instrument_id': self.instrument.id, 'interval': 'OneDay',
+                                              'date': now - timedelta(days=back), 'close': close})
+        Dash = self.env['trading.dashboard']
+        summary = Dash.get_summary()
+        json.dumps(summary, allow_nan=False)
+        row = next(p for p in summary['positions'] if p['id'] == pos.id)
+        self.assertAlmostEqual(row['unrealized_pnl'], 20.0)
+        self.assertAlmostEqual(row['pnl_pct'], 10.0)
+        self.assertAlmostEqual(row['day_pnl'], 10.0)  # de 105 a 110, 2 uds
+        self.assertIn(closed.id, [a['id'] for a in summary['activity'] if a['kind'] == 'close'])
+        self.assertGreaterEqual(summary['totals']['open_count'], 1)
+
+        history = Dash.get_history(7)
+        json.dumps(history, allow_nan=False)
+        self.assertEqual(len(history['points']), 8)
+        self.assertEqual(history['points'][-1]['time'], fields.Date.to_string(fields.Date.context_today(Dash)))
+        last = history['points'][-1]
+        conv = lambda v: Dash._to_company(v, self.usd)  # noqa: E731
+        others = self.env['trading.position'].search([('state', '=', 'open'), ('id', '!=', pos.id)])
+        self.assertAlmostEqual(last['realized'], conv(6.0), places=2)
+        self.assertAlmostEqual(last['unrealized'], conv(pos.unrealized_pnl) + sum(
+            conv(q.unrealized_pnl) for q in others), places=1)
+        # Hace 4 días el cierre era 104: la abierta +8 y la que aún no se había cerrado, otros +8.
+        four = history['points'][-5]
+        self.assertAlmostEqual(four['realized'], 0.0)
+        self.assertAlmostEqual(four['unrealized'] - sum(conv(q._pnl_at(104.0)) for q in others
+                                                        if q.instrument_id == self.instrument),
+                               conv(16.0), places=1)
+        self.assertEqual(Dash.get_history(13)['days'], 30)  # rango no permitido → 30
+
+        closed_data = Dash.get_closed(closed.fiscal_year)
+        json.dumps(closed_data, allow_nan=False)
+        self.assertIn(closed.id, [r['id'] for r in closed_data['rows']])
+        tax = Dash.get_tax(closed.fiscal_year)
+        json.dumps(tax, allow_nan=False)
+        self.assertIn('net_result', tax)
+
+    def test_security_user_cannot_operate_broker(self):
+        from odoo.exceptions import AccessError
+        from odoo.tests import new_test_user
+        user = new_test_user(self.env, login='solo_usuario', groups='base.group_user,trading_base.group_trading_user')
+        manager = new_test_user(self.env, login='gestor_t', groups='base.group_user,trading_base.group_trading_manager')
+        # Orden preparada por un Usuario: no puede enviarla y el broker no recibe nada.
+        order = self.env['trading.order'].with_user(user).create({
+            'account_id': self.account.id, 'instrument_id': self.instrument.id, 'side': 'buy',
+            'size_mode': 'amount', 'amount': 50.0})
+        with self.assertRaises(AccessError):
+            order.action_send()
+        self.assertEqual(FakeAdapter.placed, [])
+        # Un Gestor sí.
+        order.with_user(manager).action_send()
+        self.assertEqual(FakeAdapter.placed, [order.id])
+        pos = self._position(broker_ref='P9')
+        with patch.object(FakeAdapter, 'close_position', return_value={}) as close:
+            with self.assertRaises(AccessError):
+                pos.with_user(user).action_close_position()
+            close.assert_not_called()
+        with self.assertRaises(AccessError):
+            self.account.with_user(user).action_sync_portfolio()
+        with self.assertRaises(AccessError):
+            self.account.with_user(user).action_test_connection()
+        # «Actualizar ahora» de un Usuario: solo precios, sin tocar la cartera.
+        with patch.object(FakeAdapter, 'get_portfolio') as portfolio:
+            action = self.env['trading.position'].with_user(user).action_refresh_from_broker()
+            portfolio.assert_not_called()
+        self.assertIn('Gestores', action['params']['message'])
+        # Dividendos: el Usuario solo lee.
+        with self.assertRaises(AccessError):
+            self.env['trading.income'].with_user(user).create({
+                'account_id': self.account.id, 'kind': 'dividend', 'date': '2026-01-10', 'name': 'x', 'gross': 1.0})
+
+    def test_tax_wizard_param_only_manager(self):
+        from odoo.tests import new_test_user
+        user = new_test_user(self.env, login='solo_usuario2', groups='base.group_user,trading_base.group_trading_user')
+        self.env['ir.config_parameter'].sudo().set_param('trading.other_savings', 0)
+        self._closed(open_date=datetime(2026, 2, 1), close_date=datetime(2026, 3, 2, 12), close_rate=110.0, realized_pnl=20.0)
+        Wizard = self.env['trading.tax.report.wizard']
+        with patch.object(type(Wizard), '_ensure_rates', return_value=None):
+            Wizard.with_user(user).create({'year': 2026, 'other_savings': 99999.0}).action_print()
+        self.assertEqual(float(self.env['ir.config_parameter'].sudo().get_param('trading.other_savings')), 0.0)
+
+    def test_privacy_and_bus_recipients(self):
+        from odoo.tests import new_test_user
+        self.env['trading.broker.account']._disable_phone_home()
+        for xmlid in ('mail.ir_cron_module_update_notification', 'base_vat.vies_iap_check_update',
+                      'digest.ir_cron_digest_scheduler_action'):
+            cron = self.env.ref(xmlid, raise_if_not_found=False)
+            if cron:
+                self.assertFalse(cron.active, xmlid)
+        other = self.env['res.company'].create({'name': 'Otra compañía'})
+        mine = new_test_user(self.env, login='bus_mio', groups='base.group_user,trading_base.group_trading_user')
+        foreign = new_test_user(self.env, login='bus_otro', groups='base.group_user,trading_base.group_trading_user',
+                                company_id=other.id, company_ids=[(6, 0, [other.id])])
+        sent = []
+        with patch.object(type(self.env['bus.bus']), '_sendone', lambda s, t, k, p: sent.append((t, k, p))):
+            self.instrument._notify_live('trading_prices', {'instruments': []})
+        partners = {t.id for t, _kind, _p in sent}
+        self.assertIn(mine.partner_id.id, partners)
+        self.assertNotIn(foreign.partner_id.id, partners)
+
     def test_open_loss_saving_capped(self):
         self.env['ir.config_parameter'].sudo().set_param('trading.other_savings', 0)
         self.instrument.write({'bid': 50.0, 'ask': 50.0, 'last_price': 50.0})

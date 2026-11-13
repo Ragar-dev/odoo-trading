@@ -80,7 +80,8 @@ class TradingTaxReportWizard(models.TransientModel):
         if not self.position_count and not has_income:
             raise UserError(self.env._('No hay operaciones cerradas ni dividendos en %s.', self.year))
         self._ensure_rates()
-        # Se recuerda para el IRPF estimado de las posiciones.
-        self.env['ir.config_parameter'].sudo().set_param('trading.other_savings', self.other_savings or 0.0)
+        # Se recuerda para el IRPF estimado de las posiciones (parámetro común: solo un Gestor lo cambia).
+        if self.env.user.has_group('trading_base.group_trading_manager'):
+            self.env['ir.config_parameter'].sudo().set_param('trading.other_savings', self.other_savings or 0.0)
         return self.env.ref('trading_base.action_report_trading_tax').report_action(
             self, data={'year': self.year, 'account_ids': self.account_ids.ids, 'other_savings': self.other_savings})

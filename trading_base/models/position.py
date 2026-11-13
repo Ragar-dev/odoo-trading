@@ -193,7 +193,10 @@ class TradingPosition(models.Model):
         accounts = self.account_id or Account.search([])
         accounts = accounts.filtered(lambda a: a.broker_type != 'manual')
         errors = []
-        for acc in accounts:
+        # Sincronizar la cartera usa las claves y escribe posiciones: solo Gestores. Un Usuario solo
+        # refresca precios (datos de mercado).
+        is_manager = self.env.su or self.env.user.has_group('trading_base.group_trading_manager')
+        for acc in accounts if is_manager else Account:
             try:
                 with self.env.cr.savepoint():
                     acc._sync_portfolio()
@@ -207,6 +210,8 @@ class TradingPosition(models.Model):
             errors.append(str(e))
         if errors:
             return Account._notify('\n'.join(errors), 'danger')
+        if not is_manager:
+            return Account._notify(self.env._('Precios actualizados. Sincronizar la cartera es solo para Gestores.'))
         return Account._notify(self.env._('Posiciones y precios actualizados (%s cuentas).', len(accounts)))
 
     # Campos calculados sin almacenar que la lista suma al agrupar (el ORM no puede agregarlos en SQL).
